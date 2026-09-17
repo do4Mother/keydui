@@ -130,6 +130,32 @@ void main() {
     expect(identical(c.rows[0].modifiers, c.rows[1].modifiers), isFalse);
   });
 
+  test(
+      'row keys are stable across updateRow, change on addRow, and drop with removeRow',
+      () async {
+    final c = controllerWith(const ApplySaved());
+    await c.load();
+    final key0 = c.keyForRow(0);
+    final key1 = c.keyForRow(1);
+    expect(key0, isNot(equals(key1)));
+
+    // A committed edit keeps the same identity for both rows.
+    c.updateRow(0, c.rows[0].copyWith(toKey: 'pageup'));
+    expect(c.keyForRow(0), key0);
+    expect(c.keyForRow(1), key1);
+
+    // A newly appended row (via addRow) gets a fresh key.
+    c.addRow();
+    final key2 = c.keyForRow(2);
+    expect(key2, isNot(equals(key0)));
+    expect(key2, isNot(equals(key1)));
+
+    // Removing row 0 drops its key and shifts the others up with it.
+    c.removeRow(0);
+    expect(c.keyForRow(0), key1);
+    expect(c.keyForRow(1), key2);
+  });
+
   test('mutating one row\'s modifiers does not affect other rows in same section',
       () async {
     final c = controllerWith(const ApplySaved());

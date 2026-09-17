@@ -22,9 +22,22 @@ class MappingsController extends ChangeNotifier {
   String? _loadError;
   bool _isLoaded = false;
 
+  // A stable identity per row, independent of list position, so a widget
+  // keyed on it (e.g. `ValueKey(keyForRow(i))`) keeps its element -- and
+  // any ephemeral field state such as an inline error or a remap warning --
+  // attached to the same row across insertions and deletions elsewhere in
+  // the list, rather than to whatever index that row happens to occupy.
+  List<int> _rowKeys = [];
+  int _nextRowKeyId = 0;
+
   List<MappingRow> get rows => List.unmodifiable(_rows);
   ApplyResult? get lastResult => _lastResult;
   String? get loadError => _loadError;
+
+  /// A stable key for the row at [index], suitable for `ValueKey`. Preserved
+  /// across [updateRow] on that same row, freshly minted by [load] and
+  /// [addRow], and dropped along with its row by [removeRow].
+  Object keyForRow(int index) => _rowKeys[index];
 
   bool get isDirty => serialize() != _baseline;
 
@@ -45,6 +58,7 @@ class MappingsController extends ChangeNotifier {
                 rawLine: row.rawLine,
               ))
           .toList();
+      _rowKeys = List.generate(_rows.length, (_) => _nextRowKeyId++);
       _baseline = serialize();
       _loadError = null;
       _isLoaded = true;
@@ -62,6 +76,7 @@ class MappingsController extends ChangeNotifier {
       ..._rows,
       const MappingRow(modifiers: {}, fromKey: '', toKey: ''),
     ];
+    _rowKeys = [..._rowKeys, _nextRowKeyId++];
     notifyListeners();
   }
 
@@ -80,17 +95,21 @@ class MappingsController extends ChangeNotifier {
       toKey: row.toKey,
       rawLine: row.rawLine,
     );
+    final nextKeys = _rowKeys.toList();
     if (index < next.length) {
       next[index] = rowWithFreshModifiers;
     } else {
       next.add(rowWithFreshModifiers);
+      nextKeys.add(_nextRowKeyId++);
     }
     _rows = next;
+    _rowKeys = nextKeys;
     notifyListeners();
   }
 
   void removeRow(int index) {
     _rows = (_rows.toList()..removeAt(index));
+    _rowKeys = (_rowKeys.toList()..removeAt(index));
     notifyListeners();
   }
 

@@ -23,6 +23,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   @override
+  void didUpdateWidget(covariant HomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.controller != oldWidget.controller) {
+      oldWidget.controller.removeListener(_onChange);
+      widget.controller.addListener(_onChange);
+    }
+  }
+
+  @override
   void dispose() {
     widget.controller.removeListener(_onChange);
     super.dispose();
@@ -81,8 +90,25 @@ class _HomePageState extends State<HomePage> {
                   )
                 : ListView.builder(
                     itemCount: rows.length,
+                    // Without this, SliverChildBuilderDelegate only reuses a
+                    // child element when its key matches at the SAME index;
+                    // it does not search other indices for a moved key. A
+                    // row's element (and the ephemeral field state it
+                    // holds -- an inline error, a remap warning, a listen
+                    // capture) would otherwise be discarded and rebuilt
+                    // fresh whenever a row above it is removed or added,
+                    // even though the tile is keyed on a stable row identity.
+                    findChildIndexCallback: (key) {
+                      final valueKey = key as ValueKey<Object>;
+                      for (var i = 0; i < rows.length; i++) {
+                        if (controller.keyForRow(i) == valueKey.value) {
+                          return i;
+                        }
+                      }
+                      return null;
+                    },
                     itemBuilder: (context, index) => MappingRowTile(
-                      key: ValueKey(index),
+                      key: ValueKey(controller.keyForRow(index)),
                       row: rows[index],
                       catalog: widget.catalog,
                       warningBuilder: (key) =>
