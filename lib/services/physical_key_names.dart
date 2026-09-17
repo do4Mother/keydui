@@ -7,7 +7,8 @@ import '../models/modifier.dart';
 final Map<int, String> _names = {
   for (var i = 0; i < 26; i++)
     PhysicalKeyboardKey.keyA.usbHidUsage + i: String.fromCharCode(97 + i),
-  for (var i = 0; i < 9; i++) PhysicalKeyboardKey.digit1.usbHidUsage + i: '${i + 1}',
+  for (var i = 0; i < 9; i++)
+    PhysicalKeyboardKey.digit1.usbHidUsage + i: '${i + 1}',
   PhysicalKeyboardKey.digit0.usbHidUsage: '0',
   for (var i = 0; i < 12; i++)
     PhysicalKeyboardKey.f1.usbHidUsage + i: 'f${i + 1}',

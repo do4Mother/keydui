@@ -28,9 +28,11 @@ Future<MappingsController> pumpHome(
     readConfig: () async => config,
   );
   await controller.load();
-  await tester.pumpWidget(MaterialApp(
-    home: HomePage(controller: controller, catalog: catalog),
-  ));
+  await tester.pumpWidget(
+    MaterialApp(
+      home: HomePage(controller: controller, catalog: catalog),
+    ),
+  );
   await tester.pumpAndSettle();
   return controller;
 }
@@ -55,14 +57,19 @@ void main() {
     expect(find.byType(MappingRowTile), findsNWidgets(2));
   });
 
-  testWidgets('save is disabled until dirty, then reports success',
-      (tester) async {
+  testWidgets('save is disabled until dirty, then reports success', (
+    tester,
+  ) async {
     final controller = await pumpHome(tester);
     final saveButton = find.byIcon(Icons.save);
-    expect(tester.widget<IconButton>(find.ancestor(
-      of: saveButton,
-      matching: find.byType(IconButton),
-    )).onPressed, isNull);
+    expect(
+      tester
+          .widget<IconButton>(
+            find.ancestor(of: saveButton, matching: find.byType(IconButton)),
+          )
+          .onPressed,
+      isNull,
+    );
 
     controller.updateRow(0, controller.rows[0].copyWith(toKey: 'esc'));
     await tester.pumpAndSettle();
@@ -72,8 +79,10 @@ void main() {
   });
 
   testWidgets('an invalid config surfaces keyd\'s message', (tester) async {
-    final controller =
-        await pumpHome(tester, result: const ApplyInvalid('line 2: bad key'));
+    final controller = await pumpHome(
+      tester,
+      result: const ApplyInvalid('line 2: bad key'),
+    );
     controller.updateRow(0, controller.rows[0].copyWith(toKey: 'esc'));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.save));
@@ -87,9 +96,11 @@ void main() {
       readConfig: () async => throw const FileSystemException('denied'),
     );
     await controller.load();
-    await tester.pumpWidget(MaterialApp(
-      home: HomePage(controller: controller, catalog: catalog),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomePage(controller: controller, catalog: catalog),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.textContaining('Could not read'), findsOneWidget);
     expect(find.textContaining(configPath), findsOneWidget);
@@ -101,19 +112,20 @@ void main() {
       readConfig: () async => sample,
     );
     await controller.load();
-    await tester.pumpWidget(MaterialApp(
-      home: HomePage(
-        controller: controller,
-        catalog: KeyCatalog(fallbackKeys, isFallback: true),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomePage(
+          controller: controller,
+          catalog: KeyCatalog(fallbackKeys, isFallback: true),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     expect(find.textContaining('keyd was not found'), findsOneWidget);
   });
 
   testWidgets('a cancelled password prompt is reported', (tester) async {
-    final controller =
-        await pumpHome(tester, result: const ApplyCancelled());
+    final controller = await pumpHome(tester, result: const ApplyCancelled());
     controller.updateRow(0, controller.rows[0].copyWith(toKey: 'esc'));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.save));
@@ -122,8 +134,10 @@ void main() {
   });
 
   testWidgets('a failure to apply is reported', (tester) async {
-    final controller =
-        await pumpHome(tester, result: const ApplyFailed('disk full'));
+    final controller = await pumpHome(
+      tester,
+      result: const ApplyFailed('disk full'),
+    );
     controller.updateRow(0, controller.rows[0].copyWith(toKey: 'esc'));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.save));
@@ -132,10 +146,8 @@ void main() {
     expect(find.textContaining('disk full'), findsOneWidget);
   });
 
-  testWidgets(
-      'deleting a row above one with an inline error keeps the error '
-      'with its own row, not the list position it vacates',
-      (tester) async {
+  testWidgets('deleting a row above one with an inline error keeps the error '
+      'with its own row, not the list position it vacates', (tester) async {
     await pumpHome(
       tester,
       config: '[meta]\nleft = home\nright = end\nup = pageup\n',
@@ -152,10 +164,7 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     expect(find.text('zzznotakey'), findsOneWidget);
-    expect(
-      find.text("keyd doesn't recognise this key name."),
-      findsOneWidget,
-    );
+    expect(find.text("keyd doesn't recognise this key name."), findsOneWidget);
 
     // Delete row 0 (left -> home); row 1's content shifts up to index 0.
     await tester.tap(find.byIcon(Icons.delete_outline).first);
@@ -165,18 +174,13 @@ void main() {
     // position -- not been left behind for row 2's content (now at index 1)
     // to inherit, which is what index-keyed tiles would do.
     expect(find.text('zzznotakey'), findsOneWidget);
-    expect(
-      find.text("keyd doesn't recognise this key name."),
-      findsOneWidget,
-    );
+    expect(find.text("keyd doesn't recognise this key name."), findsOneWidget);
     // Row 2's own, untouched value renders cleanly at its new position.
     expect(find.widgetWithText(TextField, 'up'), findsOneWidget);
   });
 
-  testWidgets(
-      'didUpdateWidget swaps the controller listener when the parent '
-      'supplies a different controller',
-      (tester) async {
+  testWidgets('didUpdateWidget swaps the controller listener when the parent '
+      'supplies a different controller', (tester) async {
     // `build()` always reads `widget.controller`, so a rendered-content
     // assertion alone (e.g. tile count) would pass identically whether or
     // not the OLD controller's listener was actually removed: a spurious
@@ -205,18 +209,22 @@ void main() {
     );
     await controllerB.load();
 
-    await tester.pumpWidget(MaterialApp(
-      home: HomePage(controller: controllerA, catalog: catalog),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomePage(controller: controllerA, catalog: catalog),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.byType(MappingRowTile), findsOneWidget);
 
     // Same widget position and type, but a different controller: this is a
     // parent rebuild, which should route through didUpdateWidget rather
     // than initState/dispose.
-    await tester.pumpWidget(MaterialApp(
-      home: HomePage(controller: controllerB, catalog: catalog),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomePage(controller: controllerB, catalog: catalog),
+      ),
+    );
     await tester.pumpAndSettle();
     homeRebuilds = 0; // Baseline after the swap itself has settled.
 

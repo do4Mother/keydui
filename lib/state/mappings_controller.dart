@@ -7,10 +7,7 @@ import '../services/apply_service.dart';
 import '../services/keyd_config_parser.dart';
 
 class MappingsController extends ChangeNotifier {
-  MappingsController({
-    required this.applyService,
-    required this.readConfig,
-  });
+  MappingsController({required this.applyService, required this.readConfig});
 
   final ApplyService applyService;
   final Future<String> Function() readConfig;
@@ -51,8 +48,7 @@ class MappingsController extends ChangeNotifier {
   bool get isDirty => serialize() != _baseline;
 
   bool get canSave =>
-      isDirty &&
-      _rows.every((r) => r.fromKey.isNotEmpty && r.toKey.isNotEmpty);
+      isDirty && _rows.every((r) => r.fromKey.isNotEmpty && r.toKey.isNotEmpty);
 
   Future<void> load() async {
     try {
@@ -60,12 +56,14 @@ class MappingsController extends ChangeNotifier {
       _config = parseKeydConfig(text);
       // Copy modifier sets to avoid sharing between rows in the same section.
       _rows = _config.rows
-          .map((row) => MappingRow(
-                modifiers: Set.of(row.modifiers),
-                fromKey: row.fromKey,
-                toKey: row.toKey,
-                rawLine: row.rawLine,
-              ))
+          .map(
+            (row) => MappingRow(
+              modifiers: Set.of(row.modifiers),
+              fromKey: row.fromKey,
+              toKey: row.toKey,
+              rawLine: row.rawLine,
+            ),
+          )
           .toList();
       _rowKeys = List.generate(_rows.length, (_) => Object());
       _baseline = serialize();
@@ -81,10 +79,7 @@ class MappingsController extends ChangeNotifier {
   String serialize() => serializeKeydConfig(_config.withRows(_rows));
 
   void addRow() {
-    _rows = [
-      ..._rows,
-      const MappingRow(modifiers: {}, fromKey: '', toKey: ''),
-    ];
+    _rows = [..._rows, const MappingRow(modifiers: {}, fromKey: '', toKey: '')];
     _rowKeys = [..._rowKeys, Object()];
     notifyListeners();
   }
@@ -95,7 +90,9 @@ class MappingsController extends ChangeNotifier {
     }
     final next = _rows.toList();
     if (index > next.length) {
-      throw RangeError('index $index is out of range for list of length ${next.length}');
+      throw RangeError(
+        'index $index is out of range for list of length ${next.length}',
+      );
     }
     // Copy modifier set to avoid sharing between rows.
     final rowWithFreshModifiers = MappingRow(
@@ -122,7 +119,8 @@ class MappingsController extends ChangeNotifier {
     }
     if (index >= _rows.length) {
       throw RangeError(
-          'index $index is out of range for list of length ${_rows.length}');
+        'index $index is out of range for list of length ${_rows.length}',
+      );
     }
     _rows = (_rows.toList()..removeAt(index));
     _rowKeys = (_rowKeys.toList()..removeAt(index));

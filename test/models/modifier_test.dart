@@ -9,15 +9,21 @@ void main() {
 
   test('section names use canonical order', () {
     expect(Modifier.sectionName({Modifier.shift, Modifier.meta}), 'meta+shift');
-    expect(Modifier.sectionName({Modifier.shift, Modifier.control}),
-        'control+shift');
+    expect(
+      Modifier.sectionName({Modifier.shift, Modifier.control}),
+      'control+shift',
+    );
   });
 
   test('parses modifier section names in any order', () {
-    expect(Modifier.parseSectionName('meta+shift'),
-        {Modifier.meta, Modifier.shift});
-    expect(Modifier.parseSectionName('shift+meta'),
-        {Modifier.meta, Modifier.shift});
+    expect(Modifier.parseSectionName('meta+shift'), {
+      Modifier.meta,
+      Modifier.shift,
+    });
+    expect(Modifier.parseSectionName('shift+meta'), {
+      Modifier.meta,
+      Modifier.shift,
+    });
     expect(Modifier.parseSectionName(' meta '), {Modifier.meta});
   });
 

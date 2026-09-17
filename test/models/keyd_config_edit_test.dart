@@ -44,11 +44,7 @@ right = end
 
   test('a new modifier group appends a new section', () {
     final rows = parseKeydConfig(sample).rows.toList()
-      ..add(const MappingRow(
-        modifiers: {},
-        fromKey: 'capslock',
-        toKey: 'esc',
-      ));
+      ..add(const MappingRow(modifiers: {}, fromKey: 'capslock', toKey: 'esc'));
     expect(applyRows(sample, rows), '''# a comment
 
 [ids]
@@ -66,36 +62,39 @@ capslock = esc
   test('passthrough lines inside a section survive an edit', () {
     const text = '[main]\n# keep me\ncapslock = esc\n';
     final rows = parseKeydConfig(text).rows.toList();
-    expect(applyRows(text, [rows.single.copyWith(toKey: 'tab')]),
-        '[main]\n# keep me\ncapslock = tab\n');
+    expect(
+      applyRows(text, [rows.single.copyWith(toKey: 'tab')]),
+      '[main]\n# keep me\ncapslock = tab\n',
+    );
   });
 
   test('adding to an existing section appends inside it', () {
     final rows = parseKeydConfig(sample).rows.toList()
-      ..add(const MappingRow(
-        modifiers: {Modifier.meta},
-        fromKey: 'up',
-        toKey: 'pageup',
-      ));
+      ..add(
+        const MappingRow(
+          modifiers: {Modifier.meta},
+          fromKey: 'up',
+          toKey: 'pageup',
+        ),
+      );
     expect(applyRows(sample, rows), contains('right = end\nup = pageup\n'));
   });
 
-  test('new section appends after passthrough blocks when no mapping exists', () {
-    const text = '[ids]\n*\n';
-    final rows = <MappingRow>[
-      const MappingRow(
-        modifiers: {},
-        fromKey: 'capslock',
-        toKey: 'esc',
-      ),
-    ];
-    expect(applyRows(text, rows), '''[ids]
+  test(
+    'new section appends after passthrough blocks when no mapping exists',
+    () {
+      const text = '[ids]\n*\n';
+      final rows = <MappingRow>[
+        const MappingRow(modifiers: {}, fromKey: 'capslock', toKey: 'esc'),
+      ];
+      expect(applyRows(text, rows), '''[ids]
 *
 
 [main]
 capslock = esc
 ''');
-  });
+    },
+  );
 
   test('comments between rows survive unedited round-trip', () {
     const text = '[main]\nleft = home\n# a note\nright = end\n';

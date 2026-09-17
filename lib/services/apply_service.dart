@@ -62,8 +62,8 @@ class PkexecApplyService implements ApplyService {
     required this.runner,
     Future<String> Function(String contents)? writeTemp,
     bool Function(String path)? helperExists,
-  })  : writeTemp = writeTemp ?? _writeTempFile,
-        helperExists = helperExists ?? _helperExists;
+  }) : writeTemp = writeTemp ?? _writeTempFile,
+       helperExists = helperExists ?? _helperExists;
 
   final ProcessRunner runner;
   final Future<String> Function(String contents) writeTemp;
@@ -80,27 +80,33 @@ class PkexecApplyService implements ApplyService {
       if (!check.succeeded) {
         if (check.exitCode == 127) {
           return ApplyFailed(
-              'keyd does not appear to be installed or is not in PATH');
+            'keyd does not appear to be installed or is not in PATH',
+          );
         }
         final message = check.stderr.trim().isEmpty
             ? check.stdout.trim()
             : check.stderr.trim();
-        return ApplyInvalid(message.isEmpty ? 'Invalid configuration' : message);
+        return ApplyInvalid(
+          message.isEmpty ? 'Invalid configuration' : message,
+        );
       }
 
       // Check if the helper exists before asking for a password.
       if (!helperExists(helperPath)) {
         return ApplyFailed(
-            'The apply helper is not installed at $helperPath. Run: sudo ./install.sh');
+          'The apply helper is not installed at $helperPath. Run: sudo ./install.sh',
+        );
       }
 
       final applied = await runner.run('pkexec', [helperPath, path]);
       return switch (applied.exitCode) {
         0 => const ApplySaved(),
         126 || 127 => const ApplyCancelled(),
-        _ => ApplyFailed(applied.stderr.trim().isEmpty
-            ? 'Could not apply the configuration (exit ${applied.exitCode})'
-            : applied.stderr.trim()),
+        _ => ApplyFailed(
+          applied.stderr.trim().isEmpty
+              ? 'Could not apply the configuration (exit ${applied.exitCode})'
+              : applied.stderr.trim(),
+        ),
       };
     } finally {
       await _cleanupTemp(path);

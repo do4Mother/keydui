@@ -206,17 +206,17 @@ class _KeyFieldState extends State<KeyField> {
                 fieldViewBuilder:
                     (context, controller, focusNode, onFieldSubmitted) =>
                         TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  decoration: InputDecoration(
-                    labelText: widget.label,
-                    isDense: true,
-                    errorText: _entryError,
-                  ),
-                  onChanged: _onFieldTextChanged,
-                  onSubmitted: (text) =>
-                      _onFieldSubmitted(text, onFieldSubmitted),
-                ),
+                          controller: controller,
+                          focusNode: focusNode,
+                          decoration: InputDecoration(
+                            labelText: widget.label,
+                            isDense: true,
+                            errorText: _entryError,
+                          ),
+                          onChanged: _onFieldTextChanged,
+                          onSubmitted: (text) =>
+                              _onFieldSubmitted(text, onFieldSubmitted),
+                        ),
               ),
             ),
             IconButton(

@@ -26,11 +26,7 @@ Future<void> main() async {
 }
 
 class KeydUiApp extends StatelessWidget {
-  const KeydUiApp({
-    super.key,
-    required this.controller,
-    required this.catalog,
-  });
+  const KeydUiApp({super.key, required this.controller, required this.catalog});
 
   final MappingsController controller;
   final KeyCatalog catalog;

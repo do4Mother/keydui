@@ -3,18 +3,18 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:keydui/services/apply_service.dart';
 import 'package:keydui/services/process_runner.dart';
+
 import '../support/fake_process_runner.dart';
 
 PkexecApplyService serviceWith(
   FakeProcessRunner runner, {
   Future<String> Function(String contents)? writeTemp,
   bool Function(String path)? helperExists,
-}) =>
-    PkexecApplyService(
-      runner: runner,
-      writeTemp: writeTemp ?? (contents) async => '/tmp/fake.conf',
-      helperExists: helperExists ?? ((_) => true),
-    );
+}) => PkexecApplyService(
+  runner: runner,
+  writeTemp: writeTemp ?? (contents) async => '/tmp/fake.conf',
+  helperExists: helperExists ?? ((_) => true),
+);
 
 void main() {
   test('invalid config never reaches pkexec', () async {
@@ -34,8 +34,11 @@ void main() {
     });
     final result = await serviceWith(runner).apply('[main]\ncapslock = esc\n');
     expect(result, isA<ApplySaved>());
-    expect(runner.calls.last,
-        ['pkexec', '/usr/lib/keydui/keydui-apply', '/tmp/fake.conf']);
+    expect(runner.calls.last, [
+      'pkexec',
+      '/usr/lib/keydui/keydui-apply',
+      '/tmp/fake.conf',
+    ]);
   });
 
   test('dismissed password dialog reports cancelled', () async {
@@ -103,13 +106,16 @@ void main() {
   test('keyd missing (exit 127) reports failed with keyd message', () async {
     final runner = FakeProcessRunner({
       'keyd': const ProcessOutcome(
-          exitCode: 127, stderr: 'ProcessException: No such file or directory'),
+        exitCode: 127,
+        stderr: 'ProcessException: No such file or directory',
+      ),
     });
     final result = await serviceWith(runner).apply('x');
     expect(result, isA<ApplyFailed>());
     expect(
-        (result as ApplyFailed).message,
-        contains('keyd does not appear to be installed'));
+      (result as ApplyFailed).message,
+      contains('keyd does not appear to be installed'),
+    );
     expect(runner.calls.map((c) => c.first), isNot(contains('pkexec')));
   });
 

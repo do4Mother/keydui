@@ -40,18 +40,21 @@ class KeydConfig {
   final bool endsWithNewline;
 
   List<MappingRow> get rows => [
-        for (final element in elements)
-          if (element is MappingSection)
-            for (final entry in element.entries)
-              if (entry is RowEntry) entry.row,
-      ];
+    for (final element in elements)
+      if (element is MappingSection)
+        for (final entry in element.entries)
+          if (entry is RowEntry) entry.row,
+  ];
 
   /// Rebuilds the config so its mapping sections contain exactly [rows].
   KeydConfig withRows(List<MappingRow> rows) {
     final grouped = <String, List<MappingRow>>{};
     for (final row in rows) {
       grouped
-          .putIfAbsent(Modifier.sectionName(row.modifiers), () => <MappingRow>[])
+          .putIfAbsent(
+            Modifier.sectionName(row.modifiers),
+            () => <MappingRow>[],
+          )
           .add(row);
     }
 
@@ -82,11 +85,13 @@ class KeydConfig {
         newEntries.add(RowEntry(sectionRows[rowIndex++]));
       }
 
-      result.add(MappingSection(
-        modifiers: element.modifiers,
-        headerLine: element.headerLine,
-        entries: newEntries,
-      ));
+      result.add(
+        MappingSection(
+          modifiers: element.modifiers,
+          headerLine: element.headerLine,
+          entries: newEntries,
+        ),
+      );
       lastSectionIndex = result.length - 1;
     }
 
@@ -99,8 +104,13 @@ class KeydConfig {
         entries: entry.value.map(RowEntry.new).toList(),
       );
       // If no existing mapping section, append at end; otherwise after the last section.
-      final insertAt = lastSectionIndex >= 0 ? lastSectionIndex + 1 : result.length;
-      result.insertAll(insertAt, [PassthroughBlock(const ['']), section]);
+      final insertAt = lastSectionIndex >= 0
+          ? lastSectionIndex + 1
+          : result.length;
+      result.insertAll(insertAt, [
+        PassthroughBlock(const ['']),
+        section,
+      ]);
       lastSectionIndex = insertAt + 1;
     }
 

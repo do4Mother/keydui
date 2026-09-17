@@ -67,10 +67,9 @@ class MappingRowTile extends StatelessWidget {
                     catalog: catalog,
                     warningBuilder: warningBuilder,
                     onModifiersCaptured: (mods) => capturedModifiers = mods,
-                    onChanged: (key) => onChanged(row.copyWith(
-                      modifiers: capturedModifiers,
-                      fromKey: key,
-                    )),
+                    onChanged: (key) => onChanged(
+                      row.copyWith(modifiers: capturedModifiers, fromKey: key),
+                    ),
                   ),
                 ),
                 const Padding(

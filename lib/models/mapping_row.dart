@@ -22,12 +22,11 @@ class MappingRow {
     Set<Modifier>? modifiers,
     String? fromKey,
     String? toKey,
-  }) =>
-      MappingRow(
-        modifiers: modifiers ?? this.modifiers,
-        fromKey: fromKey ?? this.fromKey,
-        toKey: toKey ?? this.toKey,
-      );
+  }) => MappingRow(
+    modifiers: modifiers ?? this.modifiers,
+    fromKey: fromKey ?? this.fromKey,
+    toKey: toKey ?? this.toKey,
+  );
 
   String render() => rawLine ?? '$fromKey = $toKey';
 }

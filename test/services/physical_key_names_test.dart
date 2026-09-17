@@ -22,17 +22,23 @@ void main() {
 
   test('maps punctuation to keyd names', () {
     expect(keydNameForPhysicalKey(PhysicalKeyboardKey.period), 'dot');
-    expect(keydNameForPhysicalKey(PhysicalKeyboardKey.bracketLeft),
-        'leftbrace');
+    expect(
+      keydNameForPhysicalKey(PhysicalKeyboardKey.bracketLeft),
+      'leftbrace',
+    );
     expect(keydNameForPhysicalKey(PhysicalKeyboardKey.backquote), 'grave');
   });
 
   test('identifies modifier keys', () {
     expect(modifierForPhysicalKey(PhysicalKeyboardKey.metaLeft), Modifier.meta);
-    expect(modifierForPhysicalKey(PhysicalKeyboardKey.shiftRight),
-        Modifier.shift);
-    expect(modifierForPhysicalKey(PhysicalKeyboardKey.controlLeft),
-        Modifier.control);
+    expect(
+      modifierForPhysicalKey(PhysicalKeyboardKey.shiftRight),
+      Modifier.shift,
+    );
+    expect(
+      modifierForPhysicalKey(PhysicalKeyboardKey.controlLeft),
+      Modifier.control,
+    );
     expect(modifierForPhysicalKey(PhysicalKeyboardKey.keyA), isNull);
   });
 

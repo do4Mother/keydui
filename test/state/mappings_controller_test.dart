@@ -22,9 +22,9 @@ right = end
 ''';
 
 MappingsController controllerWith(ApplyResult result) => MappingsController(
-      applyService: RecordingApplyService(result),
-      readConfig: () async => sample,
-    );
+  applyService: RecordingApplyService(result),
+  readConfig: () async => sample,
+);
 
 void main() {
   test('loads rows and starts clean', () async {
@@ -91,25 +91,30 @@ void main() {
     expect(c.remapWarningFor('f4', excludingIndex: 1), isNull);
   });
 
-  test('save() after failed load returns ApplyFailed without calling apply',
-      () async {
-    final service = RecordingApplyService(const ApplySaved());
-    final c = MappingsController(
-      applyService: service,
-      readConfig: () async => throw Exception('Read failed'),
-    );
-    await c.load();
-    final result = await c.save();
-    expect(result, isA<ApplyFailed>());
-    expect(service.applied, isEmpty); // Never called apply
-    expect(c.lastResult, isA<ApplyFailed>());
-  });
+  test(
+    'save() after failed load returns ApplyFailed without calling apply',
+    () async {
+      final service = RecordingApplyService(const ApplySaved());
+      final c = MappingsController(
+        applyService: service,
+        readConfig: () async => throw Exception('Read failed'),
+      );
+      await c.load();
+      final result = await c.save();
+      expect(result, isA<ApplyFailed>());
+      expect(service.applied, isEmpty); // Never called apply
+      expect(c.lastResult, isA<ApplyFailed>());
+    },
+  );
 
   test('updateRow with index > length throws RangeError', () async {
     final c = controllerWith(const ApplySaved());
     await c.load();
     expect(
-      () => c.updateRow(10, const MappingRow(modifiers: {}, fromKey: 'a', toKey: 'b')),
+      () => c.updateRow(
+        10,
+        const MappingRow(modifiers: {}, fromKey: 'a', toKey: 'b'),
+      ),
       throwsRangeError,
     );
   });
@@ -118,7 +123,10 @@ void main() {
     final c = controllerWith(const ApplySaved());
     await c.load();
     expect(
-      () => c.updateRow(-1, const MappingRow(modifiers: {}, fromKey: 'a', toKey: 'b')),
+      () => c.updateRow(
+        -1,
+        const MappingRow(modifiers: {}, fromKey: 'a', toKey: 'b'),
+      ),
       throwsArgumentError,
     );
   });
@@ -130,9 +138,7 @@ void main() {
     expect(identical(c.rows[0].modifiers, c.rows[1].modifiers), isFalse);
   });
 
-  test(
-      'row keys are stable across updateRow, change on addRow, and drop with removeRow',
-      () async {
+  test('row keys are stable across updateRow, change on addRow, and drop with removeRow', () async {
     // These assertions care only that each key is a stable, distinct
     // identity -- never what it actually is (e.g. not that it's an int, or
     // that keys are sequential). `same()` checks object identity, which is
@@ -160,20 +166,22 @@ void main() {
     expect(c.keyForRow(1), same(key2));
   });
 
-  test('two controllers loaded with the same row count mint distinct keys',
-      () async {
-    // A counter-based key (restarting at 0 per instance) would let two
-    // controllers of the same shape mint identical key sequences. That
-    // collision would let a `ValueKey` wrongly match rows across a
-    // `didUpdateWidget` controller swap and reuse one row's ephemeral field
-    // state for an unrelated row in the other controller.
-    final a = controllerWith(const ApplySaved());
-    await a.load();
-    final b = controllerWith(const ApplySaved());
-    await b.load();
-    expect(a.keyForRow(0), isNot(same(b.keyForRow(0))));
-    expect(a.keyForRow(1), isNot(same(b.keyForRow(1))));
-  });
+  test(
+    'two controllers loaded with the same row count mint distinct keys',
+    () async {
+      // A counter-based key (restarting at 0 per instance) would let two
+      // controllers of the same shape mint identical key sequences. That
+      // collision would let a `ValueKey` wrongly match rows across a
+      // `didUpdateWidget` controller swap and reuse one row's ephemeral field
+      // state for an unrelated row in the other controller.
+      final a = controllerWith(const ApplySaved());
+      await a.load();
+      final b = controllerWith(const ApplySaved());
+      await b.load();
+      expect(a.keyForRow(0), isNot(same(b.keyForRow(0))));
+      expect(a.keyForRow(1), isNot(same(b.keyForRow(1))));
+    },
+  );
 
   test('removeRow with index >= length throws RangeError', () async {
     final c = controllerWith(const ApplySaved());
@@ -188,18 +196,20 @@ void main() {
     expect(() => c.removeRow(-1), throwsArgumentError);
   });
 
-  test('mutating one row\'s modifiers does not affect other rows in same section',
-      () async {
-    final c = controllerWith(const ApplySaved());
-    await c.load();
-    // Record the modifiers before mutation
-    final row0ModsBefore = Set.of(c.rows[0].modifiers);
-    final row1ModsBefore = Set.of(c.rows[1].modifiers);
-    // Mutate row 1's modifier set
-    c.rows[1].modifiers.add(Modifier.control);
-    // Row 0's modifiers should be unchanged
-    expect(c.rows[0].modifiers, equals(row0ModsBefore));
-    // Row 1's modifiers should have changed
-    expect(c.rows[1].modifiers, isNot(equals(row1ModsBefore)));
-  });
+  test(
+    'mutating one row\'s modifiers does not affect other rows in same section',
+    () async {
+      final c = controllerWith(const ApplySaved());
+      await c.load();
+      // Record the modifiers before mutation
+      final row0ModsBefore = Set.of(c.rows[0].modifiers);
+      final row1ModsBefore = Set.of(c.rows[1].modifiers);
+      // Mutate row 1's modifier set
+      c.rows[1].modifiers.add(Modifier.control);
+      // Row 0's modifiers should be unchanged
+      expect(c.rows[0].modifiers, equals(row0ModsBefore));
+      // Row 1's modifiers should have changed
+      expect(c.rows[1].modifiers, isNot(equals(row1ModsBefore)));
+    },
+  );
 }

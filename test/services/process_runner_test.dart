@@ -15,8 +15,10 @@ void main() {
   });
 
   test('a missing executable surfaces as exit code 127', () async {
-    final outcome =
-        await SystemProcessRunner().run('keydui-no-such-binary', const []);
+    final outcome = await SystemProcessRunner().run(
+      'keydui-no-such-binary',
+      const [],
+    );
     expect(outcome.exitCode, 127);
   });
 }

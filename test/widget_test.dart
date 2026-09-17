@@ -16,10 +16,12 @@ void main() {
       readConfig: () async => '[meta]\nleft = home\n',
     );
     await controller.load();
-    await tester.pumpWidget(KeydUiApp(
-      controller: controller,
-      catalog: const KeyCatalog(['home', 'left']),
-    ));
+    await tester.pumpWidget(
+      KeydUiApp(
+        controller: controller,
+        catalog: const KeyCatalog(['home', 'left']),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('keyd mappings'), findsOneWidget);
     expect(find.text('1 mapping'), findsOneWidget);

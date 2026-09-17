@@ -111,8 +111,10 @@ class _HomePageState extends State<HomePage> {
                       key: ValueKey(controller.keyForRow(index)),
                       row: rows[index],
                       catalog: widget.catalog,
-                      warningBuilder: (key) =>
-                          controller.remapWarningFor(key, excludingIndex: index),
+                      warningBuilder: (key) => controller.remapWarningFor(
+                        key,
+                        excludingIndex: index,
+                      ),
                       onChanged: (row) => controller.updateRow(index, row),
                       onDelete: () => controller.removeRow(index),
                     ),

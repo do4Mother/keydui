@@ -49,12 +49,16 @@ KeydConfig parseKeydConfig(String text) {
 
     final mapping = _mapping.firstMatch(line);
     if (mapping != null && mapping.group(2)!.isNotEmpty) {
-      section.entries.add(RowEntry(MappingRow(
-        modifiers: section.modifiers,
-        fromKey: mapping.group(1)!,
-        toKey: mapping.group(2)!,
-        rawLine: line,
-      )));
+      section.entries.add(
+        RowEntry(
+          MappingRow(
+            modifiers: section.modifiers,
+            fromKey: mapping.group(1)!,
+            toKey: mapping.group(2)!,
+            rawLine: line,
+          ),
+        ),
+      );
     } else {
       section.entries.add(RawEntry(line));
     }
@@ -81,5 +85,7 @@ String serializeKeydConfig(KeydConfig config) {
     }
   }
   final text = lines.join('\n');
-  return config.endsWithNewline && config.elements.isNotEmpty ? '$text\n' : text;
+  return config.endsWithNewline && config.elements.isNotEmpty
+      ? '$text\n'
+      : text;
 }
