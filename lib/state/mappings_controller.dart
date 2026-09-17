@@ -27,8 +27,17 @@ class MappingsController extends ChangeNotifier {
   // any ephemeral field state such as an inline error or a remap warning --
   // attached to the same row across insertions and deletions elsewhere in
   // the list, rather than to whatever index that row happens to occupy.
-  List<int> _rowKeys = [];
-  int _nextRowKeyId = 0;
+  //
+  // Each key is a fresh `Object()`, compared by identity, rather than a
+  // per-instance counter: a counter restarting at 0 in every controller
+  // would let two different `MappingsController`s (e.g. across a
+  // `didUpdateWidget` swap to a different controller at the same widget
+  // position) mint identical key sequences, which would let a `ValueKey`
+  // built from those keys wrongly match rows across controllers and reuse
+  // one row's ephemeral field state for an unrelated row in the other
+  // controller. `Object()` identity makes that collision impossible by
+  // construction instead of merely unlikely.
+  List<Object> _rowKeys = [];
 
   List<MappingRow> get rows => List.unmodifiable(_rows);
   ApplyResult? get lastResult => _lastResult;
@@ -58,7 +67,7 @@ class MappingsController extends ChangeNotifier {
                 rawLine: row.rawLine,
               ))
           .toList();
-      _rowKeys = List.generate(_rows.length, (_) => _nextRowKeyId++);
+      _rowKeys = List.generate(_rows.length, (_) => Object());
       _baseline = serialize();
       _loadError = null;
       _isLoaded = true;
@@ -76,7 +85,7 @@ class MappingsController extends ChangeNotifier {
       ..._rows,
       const MappingRow(modifiers: {}, fromKey: '', toKey: ''),
     ];
-    _rowKeys = [..._rowKeys, _nextRowKeyId++];
+    _rowKeys = [..._rowKeys, Object()];
     notifyListeners();
   }
 
@@ -100,7 +109,7 @@ class MappingsController extends ChangeNotifier {
       next[index] = rowWithFreshModifiers;
     } else {
       next.add(rowWithFreshModifiers);
-      nextKeys.add(_nextRowKeyId++);
+      nextKeys.add(Object());
     }
     _rows = next;
     _rowKeys = nextKeys;
@@ -108,6 +117,13 @@ class MappingsController extends ChangeNotifier {
   }
 
   void removeRow(int index) {
+    if (index < 0) {
+      throw ArgumentError('index must be non-negative, got $index');
+    }
+    if (index >= _rows.length) {
+      throw RangeError(
+          'index $index is out of range for list of length ${_rows.length}');
+    }
     _rows = (_rows.toList()..removeAt(index));
     _rowKeys = (_rowKeys.toList()..removeAt(index));
     notifyListeners();

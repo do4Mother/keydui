@@ -177,6 +177,23 @@ void main() {
       'didUpdateWidget swaps the controller listener when the parent '
       'supplies a different controller',
       (tester) async {
+    // `build()` always reads `widget.controller`, so a rendered-content
+    // assertion alone (e.g. tile count) would pass identically whether or
+    // not the OLD controller's listener was actually removed: a spurious
+    // rebuild triggered by a still-attached listener still renders from
+    // `widget.controller`, which never changed. To catch a half-fix that
+    // subscribes to the new controller without unsubscribing from the old
+    // one, we have to observe whether an extra rebuild of this page's
+    // element happens at all -- not just what it renders when it does.
+    // `debugOnRebuildDirtyWidget` is the framework's own hook for this: it
+    // fires for every element rebuilt each frame, so filtering to this
+    // page's `HomePage` element gives an exact rebuild count.
+    var homeRebuilds = 0;
+    debugOnRebuildDirtyWidget = (element, builtOnce) {
+      if (element.widget is HomePage) homeRebuilds++;
+    };
+    addTearDown(() => debugOnRebuildDirtyWidget = null);
+
     final controllerA = MappingsController(
       applyService: StubApplyService(const ApplySaved()),
       readConfig: () async => sample,
@@ -201,15 +218,21 @@ void main() {
       home: HomePage(controller: controllerB, catalog: catalog),
     ));
     await tester.pumpAndSettle();
+    homeRebuilds = 0; // Baseline after the swap itself has settled.
 
-    // The old controller must no longer drive rebuilds of this page.
+    // The old controller must no longer drive rebuilds of this page: if its
+    // listener were still attached, notifyListeners() would mark this
+    // page's element dirty and homeRebuilds would tick up even though the
+    // rendered tile count (still read from controller B) looks unchanged.
     controllerA.addRow();
     await tester.pump();
+    expect(homeRebuilds, 0);
     expect(find.byType(MappingRowTile), findsOneWidget);
 
     // The new controller must.
     controllerB.addRow();
     await tester.pump();
+    expect(homeRebuilds, greaterThan(0));
     expect(find.byType(MappingRowTile), findsNWidgets(2));
   });
 }

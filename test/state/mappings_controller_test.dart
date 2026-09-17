@@ -133,27 +133,59 @@ void main() {
   test(
       'row keys are stable across updateRow, change on addRow, and drop with removeRow',
       () async {
+    // These assertions care only that each key is a stable, distinct
+    // identity -- never what it actually is (e.g. not that it's an int, or
+    // that keys are sequential). `same()` checks object identity, which is
+    // what `ValueKey` equality (and thus tile-state preservation) relies on.
     final c = controllerWith(const ApplySaved());
     await c.load();
     final key0 = c.keyForRow(0);
     final key1 = c.keyForRow(1);
-    expect(key0, isNot(equals(key1)));
+    expect(key0, isNot(same(key1)));
 
     // A committed edit keeps the same identity for both rows.
     c.updateRow(0, c.rows[0].copyWith(toKey: 'pageup'));
-    expect(c.keyForRow(0), key0);
-    expect(c.keyForRow(1), key1);
+    expect(c.keyForRow(0), same(key0));
+    expect(c.keyForRow(1), same(key1));
 
     // A newly appended row (via addRow) gets a fresh key.
     c.addRow();
     final key2 = c.keyForRow(2);
-    expect(key2, isNot(equals(key0)));
-    expect(key2, isNot(equals(key1)));
+    expect(key2, isNot(same(key0)));
+    expect(key2, isNot(same(key1)));
 
     // Removing row 0 drops its key and shifts the others up with it.
     c.removeRow(0);
-    expect(c.keyForRow(0), key1);
-    expect(c.keyForRow(1), key2);
+    expect(c.keyForRow(0), same(key1));
+    expect(c.keyForRow(1), same(key2));
+  });
+
+  test('two controllers loaded with the same row count mint distinct keys',
+      () async {
+    // A counter-based key (restarting at 0 per instance) would let two
+    // controllers of the same shape mint identical key sequences. That
+    // collision would let a `ValueKey` wrongly match rows across a
+    // `didUpdateWidget` controller swap and reuse one row's ephemeral field
+    // state for an unrelated row in the other controller.
+    final a = controllerWith(const ApplySaved());
+    await a.load();
+    final b = controllerWith(const ApplySaved());
+    await b.load();
+    expect(a.keyForRow(0), isNot(same(b.keyForRow(0))));
+    expect(a.keyForRow(1), isNot(same(b.keyForRow(1))));
+  });
+
+  test('removeRow with index >= length throws RangeError', () async {
+    final c = controllerWith(const ApplySaved());
+    await c.load();
+    expect(() => c.removeRow(10), throwsRangeError);
+    expect(() => c.removeRow(c.rows.length), throwsRangeError);
+  });
+
+  test('removeRow with negative index throws ArgumentError', () async {
+    final c = controllerWith(const ApplySaved());
+    await c.load();
+    expect(() => c.removeRow(-1), throwsArgumentError);
   });
 
   test('mutating one row\'s modifiers does not affect other rows in same section',
