@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Installs a validated keyd config. Runs as root via pkexec.
+# Exit codes: 0 applied, 1 invalid input, 2 reload failed and config reverted.
+set -uo pipefail
+
+CONF="${KEYDUI_CONF:-/etc/keyd/default.conf}"
+BACKUP="$CONF.bak"
+STAGING="$(dirname "$CONF")/.$(basename "$CONF").new"
+
+src="${1:-}"
+if [ -z "$src" ] || [ ! -f "$src" ]; then
+  echo "usage: keydui-apply <config-file>" >&2
+  exit 1
+fi
+
+if ! keyd check "$src" >&2; then
+  exit 1
+fi
+
+if [ -f "$CONF" ]; then
+  cp -p -- "$CONF" "$BACKUP" || exit 1
+fi
+
+# Stage inside the destination directory: $src is typically on /tmp (tmpfs),
+# and rename(2) cannot cross filesystems.
+cp -- "$src" "$STAGING" || exit 1
+chown root:root "$STAGING" 2>/dev/null || true
+chmod 0644 "$STAGING" || exit 1
+mv -f -- "$STAGING" "$CONF" || exit 1
+
+if ! keyd reload; then
+  echo "keyd reload failed; restoring previous config" >&2
+  if [ -f "$BACKUP" ]; then
+    cp -- "$BACKUP" "$CONF"
+    keyd reload || true
+  fi
+  exit 2
+fi
+
+exit 0
