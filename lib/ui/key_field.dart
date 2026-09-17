@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/modifier.dart';
+import '../models/remap_warning.dart';
 import '../services/key_catalog.dart';
 import '../services/physical_key_names.dart';
 
@@ -14,6 +15,7 @@ class KeyField extends StatefulWidget {
     required this.onChanged,
     this.onModifiersCaptured,
     this.warningBuilder,
+    this.onWarningAccepted,
     this.validateAgainstCatalog = true,
   });
 
@@ -36,10 +38,25 @@ class KeyField extends StatefulWidget {
   final ValueChanged<String> onChanged;
 
   /// Called with the modifiers held during a listen capture (from-fields only).
+  ///
+  /// Contract: within a single capture this is always called first and is
+  /// always followed SYNCHRONOUSLY by [onChanged] with the captured key, in
+  /// the same event handler and before this widget rebuilds -- so a consumer
+  /// may stash the modifiers here and fold them into the row it builds in
+  /// [onChanged] rather than emitting two separate updates.
   final ValueChanged<Set<Modifier>>? onModifiersCaptured;
 
-  /// Given a captured key, returns a warning label or null.
-  final String? Function(String capturedKey)? warningBuilder;
+  /// Given a captured key, returns the mapping that already produces it, or
+  /// null. The result is structured (modifiers + bare key), not a flattened
+  /// `meta+left` label, so accepting it can update a row's modifiers and its
+  /// key separately; [RemapWarning.label] renders the display text.
+  final RemapWarning? Function(String capturedKey)? warningBuilder;
+
+  /// Called when the user accepts the warning's "Use `<label>`" suggestion.
+  /// The consumer applies BOTH halves -- the modifiers and the key -- to the
+  /// row; [onChanged] is deliberately not used for this, because the key
+  /// field alone cannot express the modifier half.
+  final ValueChanged<RemapWarning>? onWarningAccepted;
 
   /// Whether manually typed, submitted text is checked against [catalog]
   /// and lower-cased before reaching [onChanged].
@@ -68,7 +85,7 @@ class _KeyFieldState extends State<KeyField> {
   final _fieldFocus = FocusNode();
   late final _controller = TextEditingController(text: widget.value);
   bool _listening = false;
-  String? _warning;
+  RemapWarning? _warning;
   String? _entryError;
 
   @override
@@ -231,7 +248,7 @@ class _KeyFieldState extends State<KeyField> {
             children: [
               Flexible(
                 child: Text(
-                  'keyd maps $_warning to this key',
+                  'keyd maps ${_warning!.label} to this key',
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.error,
                     fontSize: 12,
@@ -240,10 +257,10 @@ class _KeyFieldState extends State<KeyField> {
               ),
               TextButton(
                 onPressed: () {
-                  widget.onChanged(_warning!);
+                  widget.onWarningAccepted?.call(_warning!);
                   setState(() => _warning = null);
                 },
-                child: Text('Use $_warning'),
+                child: Text('Use ${_warning!.label}'),
               ),
             ],
           ),

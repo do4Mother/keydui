@@ -86,10 +86,50 @@ void main() {
   test('remap warning finds the pre-remap combination', () async {
     final c = controllerWith(const ApplySaved());
     await c.load();
-    expect(c.remapWarningFor('home', excludingIndex: 1), 'meta+left');
+    final warning = c.remapWarningFor('home', excludingIndex: 1);
+    // Structure, not a flattened label: `meta+left` is not a key name.
+    expect(warning, isNotNull);
+    expect(warning!.modifiers, {Modifier.meta});
+    expect(warning.fromKey, 'left');
+    expect(warning.label, 'meta+left');
     expect(c.remapWarningFor('home', excludingIndex: 0), isNull);
     expect(c.remapWarningFor('f4', excludingIndex: 1), isNull);
   });
+
+  test('a warning for an unmodified mapping has no modifiers', () async {
+    final c = MappingsController(
+      applyService: RecordingApplyService(const ApplySaved()),
+      readConfig: () async => '[main]\ncapslock = esc\nf1 = f2\n',
+    );
+    await c.load();
+    final warning = c.remapWarningFor('esc', excludingIndex: 1);
+    expect(warning!.modifiers, isEmpty);
+    expect(warning.fromKey, 'capslock');
+    expect(warning.label, 'capslock');
+  });
+
+  test(
+    'applying a remap warning serializes to a config keyd accepts',
+    () async {
+      final c = controllerWith(const ApplySaved());
+      await c.load();
+      c.addRow();
+      final warning = c.remapWarningFor('home', excludingIndex: 2)!;
+      c.updateRow(
+        2,
+        c.rows[2].copyWith(
+          modifiers: warning.modifiers,
+          fromKey: warning.fromKey,
+          toKey: 'pageup',
+        ),
+      );
+      // The modifier half has to land in the section header, never in the key
+      // name: `meta+left = pageup` inside `[main]` is what keyd rejects.
+      expect(c.serialize(), contains('[meta]'));
+      expect(c.serialize(), isNot(contains('meta+left =')));
+      expect(c.serialize(), contains('left = pageup'));
+    },
+  );
 
   test(
     'save() after failed load returns ApplyFailed without calling apply',

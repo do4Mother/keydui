@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:keydui/models/mapping_row.dart';
 import 'package:keydui/models/modifier.dart';
+import 'package:keydui/models/remap_warning.dart';
 import 'package:keydui/services/key_catalog.dart';
 import 'package:keydui/ui/mapping_row_tile.dart';
 
@@ -135,4 +136,51 @@ void main() {
     expect(picked, 'S-home');
     expect(find.text("keyd doesn't recognise this key name."), findsNothing);
   });
+
+  testWidgets(
+    'accepting a remap warning moves the modifier half onto the chips and '
+    'only the bare key into the from-field',
+    (tester) async {
+      final updates = <MappingRow>[];
+      const plainRow = MappingRow(modifiers: {}, fromKey: '', toKey: 'pageup');
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MappingRowTile(
+              row: plainRow,
+              catalog: catalog,
+              warningBuilder: (key) => key == 'home'
+                  ? const RemapWarning(
+                      modifiers: {Modifier.meta},
+                      fromKey: 'left',
+                    )
+                  : null,
+              onChanged: updates.add,
+              onDelete: () {},
+            ),
+          ),
+        ),
+      );
+
+      // Capture `home` in the from-field: keyd already produces it from
+      // meta+left, so the tile offers that combination.
+      await tester.tap(find.byIcon(Icons.headphones).first);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.home);
+      await tester.pumpAndSettle();
+      expect(find.text('keyd maps meta+left to this key'), findsOneWidget);
+
+      updates.clear();
+      await tester.tap(find.text('Use meta+left'));
+      await tester.pumpAndSettle();
+
+      expect(updates, hasLength(1));
+      // `meta` belongs to the section header, so it must reach the row's
+      // modifier set -- not the key name, which would serialize to
+      // `meta+left = pageup` inside `[main]` and be rejected by keyd.
+      expect(updates.single.modifiers, {Modifier.meta});
+      expect(updates.single.fromKey, 'left');
+      expect(updates.single.toKey, 'pageup');
+    },
+  );
 }

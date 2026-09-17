@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/mapping_row.dart';
 import '../models/modifier.dart';
+import '../models/remap_warning.dart';
 import '../services/key_catalog.dart';
 import 'key_field.dart';
 
@@ -19,7 +20,7 @@ class MappingRowTile extends StatelessWidget {
   final KeyCatalog catalog;
   final ValueChanged<MappingRow> onChanged;
   final VoidCallback onDelete;
-  final String? Function(String capturedKey)? warningBuilder;
+  final RemapWarning? Function(String capturedKey)? warningBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -66,6 +67,18 @@ class MappingRowTile extends StatelessWidget {
                     value: row.fromKey,
                     catalog: catalog,
                     warningBuilder: warningBuilder,
+                    // The warning's trigger is `<modifiers>+<key>`; the key
+                    // field can only hold the key half, so accepting it has
+                    // to move the modifier half onto the row's chips too.
+                    // Feeding the whole `meta+left` label through onChanged
+                    // would produce `meta+left = …` inside `[main]`, which
+                    // keyd rejects.
+                    onWarningAccepted: (warning) => onChanged(
+                      row.copyWith(
+                        modifiers: warning.modifiers,
+                        fromKey: warning.fromKey,
+                      ),
+                    ),
                     onModifiersCaptured: (mods) => capturedModifiers = mods,
                     onChanged: (key) => onChanged(
                       row.copyWith(modifiers: capturedModifiers, fromKey: key),

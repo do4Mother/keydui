@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:keydui/models/modifier.dart';
+import 'package:keydui/models/remap_warning.dart';
 import 'package:keydui/services/key_catalog.dart';
 import 'package:keydui/ui/key_field.dart';
 
@@ -17,7 +18,8 @@ const fallbackCatalog = KeyCatalog([
 Future<void> pumpField(
   WidgetTester tester, {
   required ValueChanged<String> onChanged,
-  String? Function(String)? warningBuilder,
+  RemapWarning? Function(String)? warningBuilder,
+  ValueChanged<RemapWarning>? onWarningAccepted,
   ValueChanged<Set<Modifier>>? onModifiersCaptured,
   String value = '',
   bool validateAgainstCatalog = true,
@@ -31,6 +33,7 @@ Future<void> pumpField(
         onChanged: onChanged,
         onModifiersCaptured: onModifiersCaptured,
         warningBuilder: warningBuilder,
+        onWarningAccepted: onWarningAccepted,
         validateAgainstCatalog: validateAgainstCatalog,
       ),
     ),
@@ -77,10 +80,14 @@ void main() {
 
   testWidgets('a remapped capture offers the pre-remap key', (tester) async {
     final reported = <String>[];
+    final accepted = <RemapWarning>[];
     await pumpField(
       tester,
       onChanged: reported.add,
-      warningBuilder: (key) => key == 'home' ? 'meta+left' : null,
+      warningBuilder: (key) => key == 'home'
+          ? const RemapWarning(modifiers: {Modifier.meta}, fromKey: 'left')
+          : null,
+      onWarningAccepted: accepted.add,
     );
     await tester.tap(find.byIcon(Icons.headphones));
     await tester.pumpAndSettle();
@@ -89,7 +96,16 @@ void main() {
     expect(find.text('keyd maps meta+left to this key'), findsOneWidget);
     await tester.tap(find.text('Use meta+left'));
     await tester.pumpAndSettle();
-    expect(reported, ['home', 'meta+left']);
+
+    // The suggestion is `meta` + `left`, and it must arrive as those two
+    // parts. Pushing the flattened label back through onChanged would make
+    // the key name literally `meta+left`, which serializes to a line keyd
+    // rejects with "meta is not a valid key".
+    expect(reported, ['home']);
+    expect(accepted, hasLength(1));
+    expect(accepted.single.modifiers, {Modifier.meta});
+    expect(accepted.single.fromKey, 'left');
+    expect(find.text('keyd maps meta+left to this key'), findsNothing);
   });
 
   testWidgets('a modifier held alone is not a capture', (tester) async {
@@ -139,9 +155,8 @@ void main() {
     expect(find.text('Press a key…'), findsNothing);
   });
 
-  testWidgets('using the pre-remap label updates the displayed field text', (
-    tester,
-  ) async {
+  testWidgets('accepting the suggestion updates the displayed field text once '
+      'the consumer applies it', (tester) async {
     final reported = <String>[];
     var currentValue = '';
     await tester.pumpWidget(
@@ -149,14 +164,24 @@ void main() {
         home: Scaffold(
           body: StatefulBuilder(
             builder: (context, setState) => KeyField(
-              label: 'To',
+              label: 'From',
               value: currentValue,
               catalog: catalog,
               onChanged: (v) {
                 reported.add(v);
                 setState(() => currentValue = v);
               },
-              warningBuilder: (key) => key == 'home' ? 'meta+left' : null,
+              warningBuilder: (key) => key == 'home'
+                  ? const RemapWarning(
+                      modifiers: {Modifier.meta},
+                      fromKey: 'left',
+                    )
+                  : null,
+              // A real consumer applies the modifier half to the row's chips
+              // and the key half to this field; here only the key half is
+              // observable, and it is the BARE key, not `meta+left`.
+              onWarningAccepted: (warning) =>
+                  setState(() => currentValue = warning.fromKey),
             ),
           ),
         ),
@@ -172,10 +197,10 @@ void main() {
     );
     await tester.tap(find.text('Use meta+left'));
     await tester.pumpAndSettle();
-    expect(reported, ['home', 'meta+left']);
+    expect(reported, ['home']);
     expect(
       tester.widget<TextField>(find.byType(TextField)).controller!.text,
-      'meta+left',
+      'left',
     );
   });
 

@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/keyd_config.dart';
 import '../models/mapping_row.dart';
-import '../models/modifier.dart';
+import '../models/remap_warning.dart';
 import '../services/apply_service.dart';
 import '../services/keyd_config_parser.dart';
 
@@ -128,15 +128,25 @@ class MappingsController extends ChangeNotifier {
   }
 
   /// If another row already maps something to [capturedKey], returns that
-  /// row's pre-remap label (e.g. `meta+left`). keyd rewrites keys below the
-  /// display server, so a captured key may be a mapping's output.
-  String? remapWarningFor(String capturedKey, {required int excludingIndex}) {
+  /// row's pre-remap trigger. keyd rewrites keys below the display server,
+  /// so a captured key may be a mapping's output.
+  ///
+  /// The trigger is returned as modifiers plus a bare key name rather than a
+  /// flattened `meta+left` label, so a caller can apply both halves to the
+  /// right places on the row instead of stuffing `meta+left` into the key
+  /// field, which would serialize to a line keyd rejects.
+  RemapWarning? remapWarningFor(
+    String capturedKey, {
+    required int excludingIndex,
+  }) {
     for (var i = 0; i < _rows.length; i++) {
       if (i == excludingIndex) continue;
       final row = _rows[i];
       if (row.toKey != capturedKey) continue;
-      final section = Modifier.sectionName(row.modifiers);
-      return section == 'main' ? row.fromKey : '$section+${row.fromKey}';
+      return RemapWarning(
+        modifiers: Set.of(row.modifiers),
+        fromKey: row.fromKey,
+      );
     }
     return null;
   }
