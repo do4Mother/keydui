@@ -17,6 +17,19 @@ class KeyField extends StatefulWidget {
   });
 
   final String label;
+
+  /// The current keyd key name shown in the field.
+  ///
+  /// The field owns a [TextEditingController] internally rather than handing
+  /// [Autocomplete] a fresh `initialValue` on every build, so this is not
+  /// applied "for free" the way a plain [TextField]'s initial text would be.
+  /// Whenever this differs from the previous build — for example because the
+  /// parent applied the warning row's "Use `<label>`" suggestion, which calls
+  /// [onChanged] without any change to listen mode — `didUpdateWidget` copies
+  /// the new text into the controller. It is left alone on every other
+  /// rebuild, since [value] only changes in response to [onChanged] and not
+  /// on each keystroke, so a rebuild mid-typing never clobbers unsubmitted
+  /// text.
   final String value;
   final KeyCatalog catalog;
   final ValueChanged<String> onChanged;
@@ -32,14 +45,59 @@ class KeyField extends StatefulWidget {
 }
 
 class _KeyFieldState extends State<KeyField> {
+  static const _unrecognizedKeyMessage =
+      "keyd doesn't recognise this key name.";
+
   final _listenFocus = FocusNode();
+  final _fieldFocus = FocusNode();
+  late final _controller = TextEditingController(text: widget.value);
   bool _listening = false;
   String? _warning;
+  String? _entryError;
+
+  @override
+  void didUpdateWidget(covariant KeyField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != oldWidget.value && _controller.text != widget.value) {
+      _controller.value = TextEditingValue(
+        text: widget.value,
+        selection: TextSelection.collapsed(offset: widget.value.length),
+      );
+    }
+  }
 
   @override
   void dispose() {
     _listenFocus.dispose();
+    _fieldFocus.dispose();
+    _controller.dispose();
     super.dispose();
+  }
+
+  /// Whether [text] is acceptable as a manually typed (not autocompleted)
+  /// key name. A fallback catalog only covers the common 104-key set, so it
+  /// is not authoritative and anything typed is accepted; a real catalog
+  /// from `keyd list-keys` is authoritative and typos are rejected.
+  bool _isKnownKey(String text) =>
+      widget.catalog.isFallback || widget.catalog.contains(text);
+
+  void _onFieldTextChanged(String text) {
+    if (_entryError != null && _isKnownKey(text.trim())) {
+      setState(() => _entryError = null);
+    }
+  }
+
+  void _onFieldSubmitted(String text, VoidCallback onFieldSubmitted) {
+    final trimmed = text.trim();
+    if (trimmed.isNotEmpty) {
+      if (_isKnownKey(trimmed)) {
+        setState(() => _entryError = null);
+        widget.onChanged(trimmed);
+      } else {
+        setState(() => _entryError = _unrecognizedKeyMessage);
+      }
+    }
+    onFieldSubmitted();
   }
 
   void _startListening() {
@@ -105,9 +163,13 @@ class _KeyFieldState extends State<KeyField> {
           children: [
             Expanded(
               child: Autocomplete<String>(
-                initialValue: TextEditingValue(text: widget.value),
+                textEditingController: _controller,
+                focusNode: _fieldFocus,
                 optionsBuilder: (value) => widget.catalog.search(value.text),
-                onSelected: widget.onChanged,
+                onSelected: (selection) {
+                  setState(() => _entryError = null);
+                  widget.onChanged(selection);
+                },
                 fieldViewBuilder:
                     (context, controller, focusNode, onFieldSubmitted) =>
                         TextField(
@@ -116,11 +178,11 @@ class _KeyFieldState extends State<KeyField> {
                   decoration: InputDecoration(
                     labelText: widget.label,
                     isDense: true,
+                    errorText: _entryError,
                   ),
-                  onSubmitted: (text) {
-                    widget.onChanged(text.trim());
-                    onFieldSubmitted();
-                  },
+                  onChanged: _onFieldTextChanged,
+                  onSubmitted: (text) =>
+                      _onFieldSubmitted(text, onFieldSubmitted),
                 ),
               ),
             ),
