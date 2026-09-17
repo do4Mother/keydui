@@ -20,6 +20,7 @@ class MappingsController extends ChangeNotifier {
   String _baseline = '';
   ApplyResult? _lastResult;
   String? _loadError;
+  bool _isLoaded = false;
 
   List<MappingRow> get rows => List.unmodifiable(_rows);
   ApplyResult? get lastResult => _lastResult;
@@ -35,11 +36,21 @@ class MappingsController extends ChangeNotifier {
     try {
       final text = await readConfig();
       _config = parseKeydConfig(text);
-      _rows = _config.rows.toList();
+      // Copy modifier sets to avoid sharing between rows in the same section.
+      _rows = _config.rows
+          .map((row) => MappingRow(
+                modifiers: Set.of(row.modifiers),
+                fromKey: row.fromKey,
+                toKey: row.toKey,
+                rawLine: row.rawLine,
+              ))
+          .toList();
       _baseline = serialize();
       _loadError = null;
+      _isLoaded = true;
     } catch (e) {
       _loadError = '$e';
+      _isLoaded = false;
     }
     notifyListeners();
   }
@@ -55,11 +66,24 @@ class MappingsController extends ChangeNotifier {
   }
 
   void updateRow(int index, MappingRow row) {
+    if (index < 0) {
+      throw ArgumentError('index must be non-negative, got $index');
+    }
     final next = _rows.toList();
+    if (index > next.length) {
+      throw RangeError('index $index is out of range for list of length ${next.length}');
+    }
+    // Copy modifier set to avoid sharing between rows.
+    final rowWithFreshModifiers = MappingRow(
+      modifiers: Set.of(row.modifiers),
+      fromKey: row.fromKey,
+      toKey: row.toKey,
+      rawLine: row.rawLine,
+    );
     if (index < next.length) {
-      next[index] = row;
+      next[index] = rowWithFreshModifiers;
     } else {
-      next.add(row);
+      next.add(rowWithFreshModifiers);
     }
     _rows = next;
     notifyListeners();
@@ -85,6 +109,12 @@ class MappingsController extends ChangeNotifier {
   }
 
   Future<ApplyResult> save() async {
+    if (!_isLoaded) {
+      final result = const ApplyFailed('Config was not loaded');
+      _lastResult = result;
+      notifyListeners();
+      return result;
+    }
     final text = serialize();
     final result = await applyService.apply(text);
     if (result is ApplySaved) _baseline = text;

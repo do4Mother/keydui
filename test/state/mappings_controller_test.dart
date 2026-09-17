@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:keydui/models/mapping_row.dart';
+import 'package:keydui/models/modifier.dart';
 import 'package:keydui/services/apply_service.dart';
 import 'package:keydui/state/mappings_controller.dart';
 
@@ -87,5 +89,59 @@ void main() {
     expect(c.remapWarningFor('home', excludingIndex: 1), 'meta+left');
     expect(c.remapWarningFor('home', excludingIndex: 0), isNull);
     expect(c.remapWarningFor('f4', excludingIndex: 1), isNull);
+  });
+
+  test('save() after failed load returns ApplyFailed without calling apply',
+      () async {
+    final service = RecordingApplyService(const ApplySaved());
+    final c = MappingsController(
+      applyService: service,
+      readConfig: () async => throw Exception('Read failed'),
+    );
+    await c.load();
+    final result = await c.save();
+    expect(result, isA<ApplyFailed>());
+    expect(service.applied, isEmpty); // Never called apply
+    expect(c.lastResult, isA<ApplyFailed>());
+  });
+
+  test('updateRow with index > length throws RangeError', () async {
+    final c = controllerWith(const ApplySaved());
+    await c.load();
+    expect(
+      () => c.updateRow(10, const MappingRow(modifiers: {}, fromKey: 'a', toKey: 'b')),
+      throwsRangeError,
+    );
+  });
+
+  test('updateRow with negative index throws ArgumentError', () async {
+    final c = controllerWith(const ApplySaved());
+    await c.load();
+    expect(
+      () => c.updateRow(-1, const MappingRow(modifiers: {}, fromKey: 'a', toKey: 'b')),
+      throwsArgumentError,
+    );
+  });
+
+  test('each loaded row has its own modifier set instance', () async {
+    final c = controllerWith(const ApplySaved());
+    await c.load();
+    // Two rows in [meta] section; their modifier sets should be independent objects.
+    expect(identical(c.rows[0].modifiers, c.rows[1].modifiers), isFalse);
+  });
+
+  test('mutating one row\'s modifiers does not affect other rows in same section',
+      () async {
+    final c = controllerWith(const ApplySaved());
+    await c.load();
+    // Record the modifiers before mutation
+    final row0ModsBefore = Set.of(c.rows[0].modifiers);
+    final row1ModsBefore = Set.of(c.rows[1].modifiers);
+    // Mutate row 1's modifier set
+    c.rows[1].modifiers.add(Modifier.control);
+    // Row 0's modifiers should be unchanged
+    expect(c.rows[0].modifiers, equals(row0ModsBefore));
+    // Row 1's modifiers should have changed
+    expect(c.rows[1].modifiers, isNot(equals(row1ModsBefore)));
   });
 }
