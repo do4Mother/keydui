@@ -15,6 +15,7 @@ Future<void> pumpField(
   String? Function(String)? warningBuilder,
   ValueChanged<Set<Modifier>>? onModifiersCaptured,
   String value = '',
+  bool validateAgainstCatalog = true,
 }) =>
     tester.pumpWidget(MaterialApp(
       home: Scaffold(
@@ -25,6 +26,7 @@ Future<void> pumpField(
           onChanged: onChanged,
           onModifiersCaptured: onModifiersCaptured,
           warningBuilder: warningBuilder,
+          validateAgainstCatalog: validateAgainstCatalog,
         ),
       ),
     ));
@@ -270,6 +272,40 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     expect(picked, 'f4');
+    expect(find.text("keyd doesn't recognise this key name."), findsNothing);
+  });
+
+  testWidgets(
+      'a to-field (validateAgainstCatalog: false) preserves case and '
+      'accepts a modifier-prefixed action',
+      (tester) async {
+    String? picked;
+    await pumpField(
+      tester,
+      onChanged: (v) => picked = v,
+      validateAgainstCatalog: false,
+    );
+    await tester.enterText(find.byType(TextField), 'S-home');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(picked, 'S-home');
+    expect(find.text("keyd doesn't recognise this key name."), findsNothing);
+  });
+
+  testWidgets(
+      'a to-field (validateAgainstCatalog: false) accepts an action the '
+      'catalog does not list',
+      (tester) async {
+    String? picked;
+    await pumpField(
+      tester,
+      onChanged: (v) => picked = v,
+      validateAgainstCatalog: false,
+    );
+    await tester.enterText(find.byType(TextField), 'macro(a b)');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(picked, 'macro(a b)');
     expect(find.text("keyd doesn't recognise this key name."), findsNothing);
   });
 }

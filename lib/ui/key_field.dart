@@ -14,6 +14,7 @@ class KeyField extends StatefulWidget {
     required this.onChanged,
     this.onModifiersCaptured,
     this.warningBuilder,
+    this.validateAgainstCatalog = true,
   });
 
   final String label;
@@ -39,6 +40,21 @@ class KeyField extends StatefulWidget {
 
   /// Given a captured key, returns a warning label or null.
   final String? Function(String capturedKey)? warningBuilder;
+
+  /// Whether manually typed, submitted text is checked against [catalog]
+  /// and lower-cased before reaching [onChanged].
+  ///
+  /// This is correct for a *from* field, whose value is always a bare key
+  /// name — `catalog` (from `keyd list-keys`) is authoritative for those,
+  /// modulo [KeyCatalog.isFallback]. It is wrong for a *to* field, whose
+  /// value is a keyd **action**: it may carry an upper-case modifier prefix
+  /// (`S-home`, `C-M-tab`) that must not be lower-cased, or be a
+  /// `macro(...)` / `layer(...)` expression that `list-keys` never
+  /// enumerates. Defaults to `true` (from-field behaviour); pass `false` for
+  /// a to-field and let `keyd check` at save time be the gate instead. The
+  /// typeahead dropdown still offers catalog suggestions either way — only
+  /// the rejection and case-folding on manual submission are affected.
+  final bool validateAgainstCatalog;
 
   @override
   State<KeyField> createState() => _KeyFieldState();
@@ -82,16 +98,28 @@ class _KeyFieldState extends State<KeyField> {
       widget.catalog.isFallback || widget.catalog.contains(text);
 
   void _onFieldTextChanged(String text) {
+    if (!widget.validateAgainstCatalog) return;
     if (_entryError != null && _isKnownKey(text.trim().toLowerCase())) {
       setState(() => _entryError = null);
     }
   }
 
   void _onFieldSubmitted(String text, VoidCallback onFieldSubmitted) {
+    final trimmed = text.trim();
+    if (!widget.validateAgainstCatalog) {
+      // A to-field's value is a keyd action, not a bare key name: it may
+      // carry an upper-case modifier prefix (`S-home`) or be a macro/layer
+      // expression the catalog never enumerates. Accept it as typed and let
+      // `keyd check` at save time be the gate.
+      if (trimmed.isNotEmpty) widget.onChanged(trimmed);
+      onFieldSubmitted();
+      return;
+    }
+
     // keyd key names are lower case; normalize what was typed so that
     // capitalization (e.g. typing "F4" on a keyboard with no F-row, where
     // typing is the only way in) doesn't get rejected as unrecognised.
-    final normalized = text.trim().toLowerCase();
+    final normalized = trimmed.toLowerCase();
     if (normalized.isNotEmpty) {
       if (_isKnownKey(normalized)) {
         setState(() => _entryError = null);
