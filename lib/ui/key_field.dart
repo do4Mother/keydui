@@ -136,7 +136,7 @@ class _KeyFieldState extends State<KeyField> {
             children: [
               Flexible(
                 child: Text(
-                  'keyd may remap this key before it reaches the display server',
+                  'keyd maps $_warning to this key',
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.error,
                     fontSize: 12,

@@ -74,7 +74,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.home);
     await tester.pumpAndSettle();
-    expect(find.textContaining('meta+left'), findsOneWidget);
+    expect(find.text('keyd maps meta+left to this key'), findsOneWidget);
     await tester.tap(find.text('Use meta+left'));
     await tester.pumpAndSettle();
     expect(reported, ['home', 'meta+left']);
