@@ -65,13 +65,27 @@ class KeydConfig {
       final name = Modifier.sectionName(element.modifiers);
       final sectionRows = grouped.remove(name) ?? const <MappingRow>[];
       if (sectionRows.isEmpty) continue; // section emptied out; drop it
+
+      // Reconstruct entries preserving RawEntry positions and filling RowEntry slots.
+      final newEntries = <SectionEntry>[];
+      var rowIndex = 0;
+      for (final entry in element.entries) {
+        if (entry is RawEntry) {
+          newEntries.add(entry); // Preserve RawEntry in its original position
+        } else if (entry is RowEntry && rowIndex < sectionRows.length) {
+          newEntries.add(RowEntry(sectionRows[rowIndex++]));
+        }
+        // If rowIndex >= sectionRows.length, skip this RowEntry slot
+      }
+      // Append any remaining new rows after the last entry.
+      while (rowIndex < sectionRows.length) {
+        newEntries.add(RowEntry(sectionRows[rowIndex++]));
+      }
+
       result.add(MappingSection(
         modifiers: element.modifiers,
         headerLine: element.headerLine,
-        entries: [
-          ...element.entries.whereType<RawEntry>(),
-          ...sectionRows.map(RowEntry.new),
-        ],
+        entries: newEntries,
       ));
       lastSectionIndex = result.length - 1;
     }
@@ -84,7 +98,8 @@ class KeydConfig {
         headerLine: '[${entry.key}]',
         entries: entry.value.map(RowEntry.new).toList(),
       );
-      final insertAt = lastSectionIndex + 1;
+      // If no existing mapping section, append at end; otherwise after the last section.
+      final insertAt = lastSectionIndex >= 0 ? lastSectionIndex + 1 : result.length;
       result.insertAll(insertAt, [PassthroughBlock(const ['']), section]);
       lastSectionIndex = insertAt + 1;
     }

@@ -79,4 +79,27 @@ capslock = esc
       ));
     expect(applyRows(sample, rows), contains('right = end\nup = pageup\n'));
   });
+
+  test('new section appends after passthrough blocks when no mapping exists', () {
+    const text = '[ids]\n*\n';
+    final rows = <MappingRow>[
+      const MappingRow(
+        modifiers: {},
+        fromKey: 'capslock',
+        toKey: 'esc',
+      ),
+    ];
+    expect(applyRows(text, rows), '''[ids]
+*
+
+[main]
+capslock = esc
+''');
+  });
+
+  test('comments between rows survive unedited round-trip', () {
+    const text = '[main]\nleft = home\n# a note\nright = end\n';
+    final config = parseKeydConfig(text);
+    expect(serializeKeydConfig(config.withRows(config.rows)), text);
+  });
 }
