@@ -71,7 +71,16 @@ class PkexecApplyService implements ApplyService {
 
   @override
   Future<ApplyResult> apply(String configText) async {
-    final path = await writeTemp(configText);
+    // Staging the config can itself fail (a full or read-only /tmp). Inside
+    // the try it would be swallowed by the cleanup of a path that was never
+    // produced; outside any handler it escaped `apply` entirely and reached
+    // the UI as an unhandled async error with no feedback at all.
+    final String path;
+    try {
+      path = await writeTemp(configText);
+    } catch (e) {
+      return ApplyFailed('Could not stage the configuration: $e');
+    }
 
     try {
       // Validate before asking for a password: no prompt for a config that
@@ -101,7 +110,17 @@ class PkexecApplyService implements ApplyService {
       final applied = await runner.run('pkexec', [helperPath, path]);
       return switch (applied.exitCode) {
         0 => const ApplySaved(),
-        126 || 127 => const ApplyCancelled(),
+        // pkexec exits 126 when the authorization could not be obtained --
+        // the password dialog was dismissed. 127 means pkexec itself could
+        // not run the helper, and our ProcessRunner also maps a missing
+        // pkexec binary to 127: neither is a cancellation, and reporting
+        // them as one told a user with no polkit installed that they had
+        // cancelled something they never saw.
+        126 => const ApplyCancelled(),
+        127 => const ApplyFailed(
+          'pkexec could not run the apply helper. Is polkit (pkexec) '
+          'installed?',
+        ),
         _ => ApplyFailed(
           applied.stderr.trim().isEmpty
               ? 'Could not apply the configuration (exit ${applied.exitCode})'

@@ -42,13 +42,42 @@ void main() {
   });
 
   test('dismissed password dialog reports cancelled', () async {
-    for (final code in [126, 127]) {
-      final runner = FakeProcessRunner({
-        'keyd': const ProcessOutcome(exitCode: 0),
-        'pkexec': ProcessOutcome(exitCode: code),
-      });
-      expect(await serviceWith(runner).apply('x'), isA<ApplyCancelled>());
-    }
+    final runner = FakeProcessRunner({
+      'keyd': const ProcessOutcome(exitCode: 0),
+      'pkexec': const ProcessOutcome(exitCode: 126),
+    });
+    expect(await serviceWith(runner).apply('x'), isA<ApplyCancelled>());
+  });
+
+  test('pkexec missing (exit 127) reports failed, not cancelled', () async {
+    // A missing pkexec binary reaches here as 127 via ProcessRunner's
+    // ProcessException mapping; calling that "Cancelled" told a user with
+    // no polkit installed they had dismissed a dialog that never appeared.
+    final runner = FakeProcessRunner({
+      'keyd': const ProcessOutcome(exitCode: 0),
+      'pkexec': const ProcessOutcome(
+        exitCode: 127,
+        stderr: 'ProcessException: No such file or directory',
+      ),
+    });
+    final result = await serviceWith(runner).apply('x');
+    expect(result, isA<ApplyFailed>());
+    expect((result as ApplyFailed).message, contains('pkexec'));
+  });
+
+  test('a failure to stage the temp config is reported, not thrown', () async {
+    final runner = FakeProcessRunner({
+      'keyd': const ProcessOutcome(exitCode: 0),
+      'pkexec': const ProcessOutcome(exitCode: 0),
+    });
+    final result = await serviceWith(
+      runner,
+      writeTemp: (_) async =>
+          throw const FileSystemException('No space left on device'),
+    ).apply('x');
+    expect(result, isA<ApplyFailed>());
+    expect((result as ApplyFailed).message, contains('No space left'));
+    expect(runner.calls, isEmpty);
   });
 
   test('reload failure reports failed with stderr', () async {
