@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # Installs a validated keyd config. Runs as root via pkexec.
-# Exit codes: 0 applied, 1 invalid input, 2 reload failed and config reverted.
+# Exit codes:
+#   0 applied
+#   1 invalid input: usage error, an unsafe source path, or `keyd check` rejected it
+#   2 keyd reload failed; the previous config was restored
+#   3 an I/O failure occurred while backing up or installing the config
+#     (no keyd verdict involved)
+#   4 keyd reload failed AND restoring the previous config also failed;
+#     the config may still hold the version keyd just rejected
 set -uo pipefail
 
 CONF="${KEYDUI_CONF:-/etc/keyd/default.conf}"
@@ -13,26 +20,52 @@ if [ -z "$src" ] || [ ! -f "$src" ]; then
   exit 1
 fi
 
+case "$src" in
+  -*)
+    echo "keydui-apply: refusing a config path that starts with '-': $src" >&2
+    exit 1
+    ;;
+esac
+
 if ! keyd check "$src" >&2; then
   exit 1
 fi
 
 if [ -f "$CONF" ]; then
-  cp -p -- "$CONF" "$BACKUP" || exit 1
+  if ! cp -p -- "$CONF" "$BACKUP"; then
+    echo "keydui-apply: failed to back up $CONF to $BACKUP" >&2
+    exit 3
+  fi
 fi
 
 # Stage inside the destination directory: $src is typically on /tmp (tmpfs),
 # and rename(2) cannot cross filesystems.
-cp -- "$src" "$STAGING" || exit 1
+if ! cp -- "$src" "$STAGING"; then
+  echo "keydui-apply: failed to stage config at $STAGING" >&2
+  rm -f -- "$STAGING"
+  exit 3
+fi
 chown root:root "$STAGING" 2>/dev/null || true
-chmod 0644 "$STAGING" || exit 1
-mv -f -- "$STAGING" "$CONF" || exit 1
+if ! chmod 0644 "$STAGING"; then
+  echo "keydui-apply: failed to set permissions on $STAGING" >&2
+  rm -f -- "$STAGING"
+  exit 3
+fi
+if ! mv -f -- "$STAGING" "$CONF"; then
+  echo "keydui-apply: failed to install staged config at $CONF" >&2
+  rm -f -- "$STAGING"
+  exit 3
+fi
 
 if ! keyd reload; then
   echo "keyd reload failed; restoring previous config" >&2
   if [ -f "$BACKUP" ]; then
-    cp -- "$BACKUP" "$CONF"
-    keyd reload || true
+    if cp -- "$BACKUP" "$CONF"; then
+      keyd reload || true
+    else
+      echo "keydui-apply: failed to restore $BACKUP to $CONF; $CONF may still hold the config keyd just rejected" >&2
+      exit 4
+    fi
   fi
   exit 2
 fi
