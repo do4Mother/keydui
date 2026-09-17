@@ -241,4 +241,35 @@ void main() {
     expect(picked, 'notinthelist');
     expect(find.text("keyd doesn't recognise this key name."), findsNothing);
   });
+
+  testWidgets(
+      'a listen-mode capture clears a stale unrecognised-entry error',
+      (tester) async {
+    String? picked;
+    await pumpField(tester, onChanged: (v) => picked = v);
+    await tester.enterText(find.byType(TextField), 'notakey');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(
+        find.text("keyd doesn't recognise this key name."), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.headphones));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.f4);
+    await tester.pumpAndSettle();
+
+    expect(picked, 'f4');
+    expect(find.text("keyd doesn't recognise this key name."), findsNothing);
+  });
+
+  testWidgets('a capitalized submission is normalized to lower case',
+      (tester) async {
+    String? picked;
+    await pumpField(tester, onChanged: (v) => picked = v);
+    await tester.enterText(find.byType(TextField), 'F4');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(picked, 'f4');
+    expect(find.text("keyd doesn't recognise this key name."), findsNothing);
+  });
 }

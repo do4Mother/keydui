@@ -82,17 +82,20 @@ class _KeyFieldState extends State<KeyField> {
       widget.catalog.isFallback || widget.catalog.contains(text);
 
   void _onFieldTextChanged(String text) {
-    if (_entryError != null && _isKnownKey(text.trim())) {
+    if (_entryError != null && _isKnownKey(text.trim().toLowerCase())) {
       setState(() => _entryError = null);
     }
   }
 
   void _onFieldSubmitted(String text, VoidCallback onFieldSubmitted) {
-    final trimmed = text.trim();
-    if (trimmed.isNotEmpty) {
-      if (_isKnownKey(trimmed)) {
+    // keyd key names are lower case; normalize what was typed so that
+    // capitalization (e.g. typing "F4" on a keyboard with no F-row, where
+    // typing is the only way in) doesn't get rejected as unrecognised.
+    final normalized = text.trim().toLowerCase();
+    if (normalized.isNotEmpty) {
+      if (_isKnownKey(normalized)) {
         setState(() => _entryError = null);
-        widget.onChanged(trimmed);
+        widget.onChanged(normalized);
       } else {
         setState(() => _entryError = _unrecognizedKeyMessage);
       }
@@ -104,6 +107,7 @@ class _KeyFieldState extends State<KeyField> {
     setState(() {
       _listening = true;
       _warning = null;
+      _entryError = null;
     });
   }
 
@@ -133,6 +137,7 @@ class _KeyFieldState extends State<KeyField> {
     setState(() {
       _listening = false;
       _warning = widget.warningBuilder?.call(name);
+      _entryError = null;
     });
     return KeyEventResult.handled;
   }
