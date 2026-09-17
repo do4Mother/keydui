@@ -59,6 +59,25 @@ void main() {
     expect(serializeKeydConfig(config), text);
   });
 
+  test('a commented-out mapping is not a row', () {
+    const text = '[main]\n#capslock = esc\n  # indented = comment\nf1 = f2\n';
+    final config = parseKeydConfig(text);
+    expect(config.rows, hasLength(1));
+    expect(config.rows.single.fromKey, 'f1');
+    expect(serializeKeydConfig(config), text);
+  });
+
+  test('a commented-out mapping survives editing a real row beside it', () {
+    const text = '[main]\n#capslock = esc\nf1 = f2\n';
+    final config = parseKeydConfig(text);
+    final rows = config.rows.toList();
+    rows[0] = rows[0].copyWith(toKey: 'f3');
+    expect(
+      serializeKeydConfig(config.withRows(rows)),
+      '[main]\n#capslock = esc\nf1 = f3\n',
+    );
+  });
+
   test('handles a file with no trailing newline', () {
     const text = '[main]\ncapslock = esc';
     expect(serializeKeydConfig(parseKeydConfig(text)), text);

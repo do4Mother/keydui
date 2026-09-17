@@ -47,6 +47,15 @@ KeydConfig parseKeydConfig(String text) {
       continue;
     }
 
+    // A commented-out line is passthrough, never a mapping: keyd ignores it,
+    // so surfacing `#capslock = esc` as a live row would show a phantom
+    // mapping whose edits do nothing and whose deletion silently drops the
+    // user's comment.
+    if (line.trimLeft().startsWith('#')) {
+      section.entries.add(RawEntry(line));
+      continue;
+    }
+
     final mapping = _mapping.firstMatch(line);
     if (mapping != null && mapping.group(2)!.isNotEmpty) {
       section.entries.add(
