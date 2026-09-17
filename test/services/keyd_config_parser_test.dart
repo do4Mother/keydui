@@ -63,4 +63,9 @@ void main() {
     const text = '[main]\ncapslock = esc';
     expect(serializeKeydConfig(parseKeydConfig(text)), text);
   });
+
+  test('round trip for a single blank line', () {
+    const text = '\n';
+    expect(serializeKeydConfig(parseKeydConfig(text)), text);
+  });
 }

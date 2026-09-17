@@ -81,5 +81,5 @@ String serializeKeydConfig(KeydConfig config) {
     }
   }
   final text = lines.join('\n');
-  return config.endsWithNewline && text.isNotEmpty ? '$text\n' : text;
+  return config.endsWithNewline && config.elements.isNotEmpty ? '$text\n' : text;
 }
