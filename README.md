@@ -4,18 +4,20 @@ A small Flutter (Linux desktop) GUI for editing `/etc/keyd/default.conf`,
 the config file for [keyd](https://github.com/rvaiya/keyd), a system-wide
 key remapping daemon.
 
-The app reads your current keyd mappings, lets you add, edit and remove
-rows (with a "listen" mode that captures a key combo by pressing it, or you
-can type a key name directly), and shows a preview of the resulting keyd
-config before you save.
+The app reads your current keyd mappings and lets you add, edit and remove
+rows — with a "listen" mode that captures a key combo by pressing it, or
+you can type a key name directly. Saving rewrites only the lines you
+changed: comments, `[ids]` blocks, named layers and spacing are preserved
+as they were.
 
 ## Requirements
 
 - `keyd` must already be installed and its service running
   (`systemctl status keyd`). The app queries `keyd list-keys` for
   autocompletion and validates with `keyd check` before saving; without
-  keyd installed, the key list falls back to a built-in default and saving
-  is disabled.
+  keyd installed, the key list falls back to a built-in default and a save
+  attempt stops at that validation step with a message saying keyd was not
+  found — nothing is written.
 - Linux with polkit (for the privileged save step below).
 
 ## Privileged apply helper
@@ -54,4 +56,9 @@ password.
 ```bash
 flutter test
 flutter analyze
+dart format --set-exit-if-changed .
+./test/helper/apply_test.sh   # exercises the privileged helper in a sandbox
 ```
+
+`apply_test.sh` never touches `/etc`: it runs the helper against a temp
+directory with `KEYDUI_CONF` pointed inside it and a stub `keyd` on `PATH`.
