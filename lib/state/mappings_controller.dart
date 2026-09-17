@@ -18,6 +18,7 @@ class MappingsController extends ChangeNotifier {
   ApplyResult? _lastResult;
   String? _loadError;
   bool _isLoaded = false;
+  bool _saving = false;
 
   // A stable identity per row, independent of list position, so a widget
   // keyed on it (e.g. `ValueKey(keyForRow(i))`) keeps its element -- and
@@ -40,6 +41,11 @@ class MappingsController extends ChangeNotifier {
   ApplyResult? get lastResult => _lastResult;
   String? get loadError => _loadError;
 
+  /// Whether a [save] is in flight: `keyd check`, then the polkit prompt,
+  /// then the privileged helper. Nothing about that sequence is instant, so
+  /// the UI has to show it is happening and keep the user out of it.
+  bool get isSaving => _saving;
+
   /// A stable key for the row at [index], suitable for `ValueKey`. Preserved
   /// across [updateRow] on that same row, freshly minted by [load] and
   /// [addRow], and dropped along with its row by [removeRow].
@@ -47,8 +53,14 @@ class MappingsController extends ChangeNotifier {
 
   bool get isDirty => serialize() != _baseline;
 
+  /// False while a save is in flight: two concurrent privileged helpers
+  /// share one staging path and one backup file, so run B's backup step can
+  /// copy run A's already-installed NEW config over the pre-edit backup --
+  /// destroying the only copy of what the user had before.
   bool get canSave =>
-      isDirty && _rows.every((r) => r.fromKey.isNotEmpty && r.toKey.isNotEmpty);
+      !_saving &&
+      isDirty &&
+      _rows.every((r) => r.fromKey.isNotEmpty && r.toKey.isNotEmpty);
 
   Future<void> load() async {
     try {
@@ -158,11 +170,24 @@ class MappingsController extends ChangeNotifier {
       notifyListeners();
       return result;
     }
-    final text = serialize();
-    final result = await applyService.apply(text);
-    if (result is ApplySaved) _baseline = text;
-    _lastResult = result;
+    if (_saving) {
+      // Belt and braces: `canSave` already gates the button, but a second
+      // helper run must never start on top of the first.
+      return const ApplyFailed('A save is already in progress');
+    }
+    _saving = true;
     notifyListeners();
-    return result;
+    try {
+      final text = serialize();
+      final result = await applyService.apply(text);
+      if (result is ApplySaved) _baseline = text;
+      _lastResult = result;
+      return result;
+    } finally {
+      // Cleared in a finally so a throwing apply service cannot wedge the
+      // Save button off for the rest of the session.
+      _saving = false;
+      notifyListeners();
+    }
   }
 }

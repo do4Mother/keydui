@@ -40,7 +40,15 @@ class _HomePageState extends State<HomePage> {
   void _onChange() => setState(() {});
 
   Future<void> _save() async {
-    final result = await widget.controller.save();
+    // Anything the save path throws -- a full /tmp while staging, say --
+    // must still land in the snackbar rather than escaping as an unhandled
+    // async error that leaves the user with no feedback at all.
+    ApplyResult result;
+    try {
+      result = await widget.controller.save();
+    } catch (error) {
+      result = ApplyFailed('$error');
+    }
     if (!mounted) return;
     final message = switch (result) {
       ApplySaved() => 'Mappings applied',
@@ -67,11 +75,25 @@ class _HomePageState extends State<HomePage> {
               rows.length == 1 ? '1 mapping' : '${rows.length} mappings',
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.save),
-            tooltip: 'Save and apply',
-            onPressed: controller.canSave ? _save : null,
-          ),
+          if (controller.isSaving)
+            // `keyd check`, the polkit prompt and the helper run take real
+            // time; the button is disabled throughout, so say why.
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.save),
+              tooltip: 'Save and apply',
+              onPressed: controller.canSave ? _save : null,
+            ),
         ],
       ),
       body: Column(

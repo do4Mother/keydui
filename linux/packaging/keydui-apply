@@ -14,6 +14,23 @@ CONF="${KEYDUI_CONF:-/etc/keyd/default.conf}"
 BACKUP="$CONF.bak"
 STAGING="$(dirname "$CONF")/.$(basename "$CONF").new"
 
+# Serialize concurrent runs: two helpers racing share one staging path and
+# one backup file, so run B's backup step can copy run A's already-installed
+# NEW config over the pre-edit backup and destroy the only copy of what the
+# user had before. The lock is held on the config's directory through fd 9
+# for the lifetime of this process, and released when it exits.
+#
+# This is defence in depth, not a requirement: if flock is missing or cannot
+# take the lock, the apply proceeds unserialized rather than failing. It is
+# never worth refusing a user's save because a lock could not be taken.
+lock_dir="$(dirname "$CONF")"
+if command -v flock >/dev/null 2>&1 && [ -d "$lock_dir" ] && [ -r "$lock_dir" ]
+then
+  exec 9<"$lock_dir"
+  flock -w 60 9 2>/dev/null ||
+    echo "keydui-apply: could not lock $lock_dir; proceeding without it" >&2
+fi
+
 src="${1:-}"
 if [ -z "$src" ] || [ ! -f "$src" ]; then
   echo "usage: keydui-apply <config-file>" >&2
@@ -31,8 +48,30 @@ if ! keyd check "$src" >&2; then
   exit 1
 fi
 
+# Write through a staging file and rename into place: a plain `cp` onto a
+# live path truncates it first, so a failure partway (ENOSPC, a signal)
+# leaves a half-written file behind. rename(2) either replaces the
+# destination whole or does nothing.
+install_atomically() {
+  # $1 source, $2 destination
+  if ! cp -- "$1" "$STAGING"; then
+    rm -f -- "$STAGING"
+    return 1
+  fi
+  chown root:root "$STAGING" 2>/dev/null || true
+  if ! chmod 0644 "$STAGING"; then
+    rm -f -- "$STAGING"
+    return 1
+  fi
+  if ! mv -f -- "$STAGING" "$2"; then
+    rm -f -- "$STAGING"
+    return 1
+  fi
+  return 0
+}
+
 if [ -f "$CONF" ]; then
-  if ! cp -p -- "$CONF" "$BACKUP"; then
+  if ! install_atomically "$CONF" "$BACKUP"; then
     echo "keydui-apply: failed to back up $CONF to $BACKUP" >&2
     exit 3
   fi
@@ -40,27 +79,18 @@ fi
 
 # Stage inside the destination directory: $src is typically on /tmp (tmpfs),
 # and rename(2) cannot cross filesystems.
-if ! cp -- "$src" "$STAGING"; then
-  echo "keydui-apply: failed to stage config at $STAGING" >&2
-  rm -f -- "$STAGING"
-  exit 3
-fi
-chown root:root "$STAGING" 2>/dev/null || true
-if ! chmod 0644 "$STAGING"; then
-  echo "keydui-apply: failed to set permissions on $STAGING" >&2
-  rm -f -- "$STAGING"
-  exit 3
-fi
-if ! mv -f -- "$STAGING" "$CONF"; then
-  echo "keydui-apply: failed to install staged config at $CONF" >&2
-  rm -f -- "$STAGING"
+if ! install_atomically "$src" "$CONF"; then
+  echo "keydui-apply: failed to install $src at $CONF" >&2
   exit 3
 fi
 
 if ! keyd reload; then
   echo "keyd reload failed; restoring previous config" >&2
   if [ -f "$BACKUP" ]; then
-    if cp -- "$BACKUP" "$CONF"; then
+    # The revert runs precisely when something has already gone wrong, so it
+    # is the last place that can afford a half-written config: restore
+    # through the same staging + rename as the install.
+    if install_atomically "$BACKUP" "$CONF"; then
       keyd reload || true
     else
       echo "keydui-apply: failed to restore $BACKUP to $CONF; $CONF may still hold the config keyd just rejected" >&2

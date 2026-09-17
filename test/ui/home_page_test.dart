@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -13,6 +14,24 @@ class StubApplyService implements ApplyService {
   final ApplyResult result;
   @override
   Future<ApplyResult> apply(String configText) async => result;
+}
+
+class BlockingApplyService implements ApplyService {
+  final gate = Completer<void>();
+  var calls = 0;
+
+  @override
+  Future<ApplyResult> apply(String configText) async {
+    calls++;
+    await gate.future;
+    return const ApplySaved();
+  }
+}
+
+class ThrowingApplyService implements ApplyService {
+  @override
+  Future<ApplyResult> apply(String configText) async =>
+      throw const FileSystemException('No space left on device');
 }
 
 const catalog = KeyCatalog(['esc', 'capslock', 'home', 'left']);
@@ -242,5 +261,64 @@ void main() {
     await tester.pump();
     expect(homeRebuilds, greaterThan(0));
     expect(find.byType(MappingRowTile), findsNWidgets(2));
+  });
+
+  testWidgets('a save in flight shows progress and cannot be started twice', (
+    tester,
+  ) async {
+    final service = BlockingApplyService();
+    final controller = MappingsController(
+      applyService: service,
+      readConfig: () async => sample,
+    );
+    await controller.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomePage(controller: controller, catalog: catalog),
+      ),
+    );
+    await tester.pumpAndSettle();
+    controller.updateRow(0, controller.rows[0].copyWith(toKey: 'esc'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.save));
+    await tester.pump();
+
+    // The save icon is replaced by a spinner for the whole `keyd check` ->
+    // pkexec -> helper sequence, so a second click cannot land on it and
+    // start a second privileged helper alongside the first.
+    expect(find.byIcon(Icons.save), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    service.gate.complete();
+    await tester.pumpAndSettle();
+    expect(service.calls, 1);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('Mappings applied'), findsOneWidget);
+  });
+
+  testWidgets('an exception from the save path still reaches a snackbar', (
+    tester,
+  ) async {
+    final controller = MappingsController(
+      applyService: ThrowingApplyService(),
+      readConfig: () async => sample,
+    );
+    await controller.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomePage(controller: controller, catalog: catalog),
+      ),
+    );
+    await tester.pumpAndSettle();
+    controller.updateRow(0, controller.rows[0].copyWith(toKey: 'esc'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.save));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('No space left on device'), findsOneWidget);
+    // And the button is live again, not wedged off by the failure.
+    expect(find.byIcon(Icons.save), findsOneWidget);
   });
 }

@@ -1,8 +1,33 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
+
+import 'dart:io';
+
 import 'package:keydui/models/mapping_row.dart';
 import 'package:keydui/models/modifier.dart';
 import 'package:keydui/services/apply_service.dart';
 import 'package:keydui/state/mappings_controller.dart';
+
+class BlockingApplyService implements ApplyService {
+  BlockingApplyService(this.result);
+  final ApplyResult result;
+  final List<String> applied = [];
+  final gate = Completer<void>();
+
+  @override
+  Future<ApplyResult> apply(String configText) async {
+    applied.add(configText);
+    await gate.future;
+    return result;
+  }
+}
+
+class ThrowingApplyService implements ApplyService {
+  @override
+  Future<ApplyResult> apply(String configText) async =>
+      throw const FileSystemException('No space left on device');
+}
 
 class RecordingApplyService implements ApplyService {
   RecordingApplyService(this.result);
@@ -252,4 +277,58 @@ void main() {
       expect(c.rows[1].modifiers, isNot(equals(row1ModsBefore)));
     },
   );
+
+  test('a second save is refused while the first is in flight', () async {
+    final service = BlockingApplyService(const ApplySaved());
+    final c = MappingsController(
+      applyService: service,
+      readConfig: () async => sample,
+    );
+    await c.load();
+    c.updateRow(0, c.rows[0].copyWith(toKey: 'pageup'));
+    expect(c.canSave, isTrue);
+
+    final first = c.save();
+    // Two concurrent privileged helpers share one staging path and one
+    // backup file; the second run's backup would overwrite the pre-edit
+    // config with the first run's freshly installed one.
+    expect(c.isSaving, isTrue);
+    expect(c.canSave, isFalse);
+    final second = await c.save();
+    expect(second, isA<ApplyFailed>());
+    expect(service.applied, hasLength(1));
+
+    service.gate.complete();
+    expect(await first, isA<ApplySaved>());
+    expect(c.isSaving, isFalse);
+    expect(c.canSave, isFalse); // clean again after a successful save
+  });
+
+  test('a throwing apply service does not wedge the save button off', () async {
+    final c = MappingsController(
+      applyService: ThrowingApplyService(),
+      readConfig: () async => sample,
+    );
+    await c.load();
+    c.updateRow(0, c.rows[0].copyWith(toKey: 'pageup'));
+    await expectLater(c.save(), throwsA(isA<FileSystemException>()));
+    expect(c.isSaving, isFalse);
+    expect(c.canSave, isTrue);
+  });
+
+  test('isSaving notifies listeners on both edges', () async {
+    final service = BlockingApplyService(const ApplySaved());
+    final c = MappingsController(
+      applyService: service,
+      readConfig: () async => sample,
+    );
+    await c.load();
+    c.updateRow(0, c.rows[0].copyWith(toKey: 'pageup'));
+    final seen = <bool>[];
+    c.addListener(() => seen.add(c.isSaving));
+    final future = c.save();
+    service.gate.complete();
+    await future;
+    expect(seen, containsAllInOrder([true, false]));
+  });
 }
