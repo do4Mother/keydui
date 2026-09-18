@@ -44,11 +44,13 @@ jobs:
             pkg_arch: amd64
             flutter_arch: x64
             nfpm_asset: x86_64
+            flutter_setup: action
           - runner: ubuntu-24.04-arm
             arch: aarch64
             pkg_arch: arm64
             flutter_arch: arm64
             nfpm_asset: arm64
+            flutter_setup: git
 
     steps:
       - uses: actions/checkout@v4
@@ -61,9 +63,22 @@ jobs:
             gettext-base
 
       - uses: subosito/flutter-action@v2
+        if: matrix.flutter_setup == 'action'
         with:
           channel: stable
           cache: true
+
+      # Flutter publishes no prebuilt SDK for Linux arm64, so clone it there.
+      - name: Install Flutter from source
+        if: matrix.flutter_setup == 'git'
+        run: |
+          set -euo pipefail
+          git clone --depth 1 -b stable https://github.com/flutter/flutter.git "$HOME/flutter"
+          git config --global --add safe.directory "$HOME/flutter"
+          echo "$HOME/flutter/bin" >> "$GITHUB_PATH"
+
+      - name: Show the Flutter version
+        run: flutter --version
 
       - name: Resolve dependencies
         run: flutter pub get
