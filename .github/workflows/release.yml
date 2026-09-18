@@ -23,6 +23,11 @@ on:
 permissions:
   contents: write
 
+# One release at a time; a second run waits rather than racing the first.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 env:
   NFPM_VERSION: '2.43.0'
 
