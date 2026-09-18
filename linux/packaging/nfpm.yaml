@@ -1,0 +1,61 @@
+# nfpm config for the .deb and .rpm built by .github/workflows/release.yml.
+# BUNDLE_DIR, PKG_ARCH and PKG_VERSION are substituted in by envsubst
+# before nfpm reads this file.
+name: keydui
+arch: ${PKG_ARCH}
+version: ${PKG_VERSION}
+version_schema: semver
+release: 1
+section: utils
+priority: optional
+maintainer: do4Mother <do4mother@users.noreply.github.com>
+description: |
+  A GUI for editing keyd keyboard mappings.
+  keydui reads /etc/keyd/default.conf, lets you add, edit and remove
+  mappings — typing a key name or capturing a combination by pressing it —
+  and writes back only the lines you changed.
+vendor: keydui
+homepage: https://github.com/do4Mother/keydui
+license: MIT
+
+depends:
+  - libgtk-3-0
+  - policykit-1
+
+overrides:
+  rpm:
+    depends:
+      - gtk3
+      - polkit
+  deb:
+    depends:
+      - libgtk-3-0t64 | libgtk-3-0
+      - polkitd | policykit-1
+
+contents:
+  - src: ${BUNDLE_DIR}
+    dst: /usr/lib/keydui/app
+    type: tree
+
+  - src: linux/packaging/keydui-apply
+    dst: /usr/lib/keydui/keydui-apply
+    file_info:
+      mode: 0755
+      owner: root
+      group: root
+
+  - src: linux/packaging/dev.do4mother.keydui.policy
+    dst: /usr/share/polkit-1/actions/dev.do4mother.keydui.policy
+    file_info:
+      mode: 0644
+      owner: root
+      group: root
+
+  - src: linux/packaging/dev.do4mother.keydui.desktop
+    dst: /usr/share/applications/dev.do4mother.keydui.desktop
+    file_info:
+      mode: 0644
+
+  - src: /usr/lib/keydui/app/keydui
+    dst: /usr/bin/keydui
+    type: symlink

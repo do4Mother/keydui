@@ -1,0 +1,156 @@
+name: Release
+
+# Manual only: pick a version, get a draft release with a tarball, a .deb
+# and an .rpm for x86_64 and arm64.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, without a leading v (e.g. 1.0.0)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark the release as a pre-release'
+        required: false
+        type: boolean
+        default: false
+      draft:
+        description: 'Create the release as a draft (publish it yourself)'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+env:
+  NFPM_VERSION: '2.43.0'
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: x86_64
+            pkg_arch: amd64
+            flutter_arch: x64
+            nfpm_asset: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+            pkg_arch: arm64
+            flutter_arch: arm64
+            nfpm_asset: arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
+            gettext-base
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Check formatting
+        run: dart format --set-exit-if-changed .
+
+      - name: Test
+        run: flutter test
+
+      - name: Test the privileged helper
+        run: ./test/helper/apply_test.sh
+
+      - name: Build the Linux release bundle
+        run: flutter build linux --release --build-name=${{ inputs.version }}
+
+      - name: Stage the tarball
+        run: |
+          set -euo pipefail
+          stage="dist/keydui-${{ inputs.version }}-linux-${{ matrix.arch }}"
+          mkdir -p "$stage"
+          cp -a build/linux/${{ matrix.flutter_arch }}/release/bundle "$stage/app"
+          cp linux/packaging/keydui-apply "$stage/keydui-apply"
+          cp linux/packaging/dev.do4mother.keydui.policy "$stage/"
+          cp linux/packaging/dev.do4mother.keydui.desktop "$stage/"
+          cp linux/packaging/install-tarball.sh "$stage/install.sh"
+          cp linux/packaging/uninstall-tarball.sh "$stage/uninstall.sh"
+          cp README.md "$stage/"
+          chmod +x "$stage/install.sh" "$stage/uninstall.sh" "$stage/keydui-apply"
+          tar -czf "$stage.tar.gz" -C dist "$(basename "$stage")"
+          rm -rf "$stage"
+
+      - name: Install nfpm
+        run: |
+          set -euo pipefail
+          url="https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_Linux_${{ matrix.nfpm_asset }}.tar.gz"
+          curl -fsSL "$url" -o /tmp/nfpm.tar.gz
+          tar -xzf /tmp/nfpm.tar.gz -C /tmp nfpm
+          sudo install -m 0755 /tmp/nfpm /usr/local/bin/nfpm
+          nfpm --version
+
+      - name: Build the .deb and .rpm
+        env:
+          PKG_VERSION: ${{ inputs.version }}
+          PKG_ARCH: ${{ matrix.pkg_arch }}
+          BUNDLE_DIR: build/linux/${{ matrix.flutter_arch }}/release/bundle
+        run: |
+          set -euo pipefail
+          # nfpm does not expand env vars itself, so render the config first.
+          envsubst < linux/packaging/nfpm.yaml > /tmp/nfpm.yaml
+          nfpm package -f /tmp/nfpm.yaml -p deb -t dist/
+          nfpm package -f /tmp/nfpm.yaml -p rpm -t dist/
+
+      - name: Checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum keydui-*.tar.gz keydui*.deb keydui*.rpm \
+            > "keydui-${{ inputs.version }}-linux-${{ matrix.arch }}.sha256"
+          cat keydui-*.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: keydui-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Publish the release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List what will be uploaded
+        run: ls -la dist
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="v${{ inputs.version }}"
+          args=(--title "keydui $tag" --target "${{ github.sha }}" --generate-notes)
+          if [ "${{ inputs.draft }}" = "true" ]; then args+=(--draft); fi
+          if [ "${{ inputs.prerelease }}" = "true" ]; then args+=(--prerelease); fi
+          gh release create "$tag" "${args[@]}" dist/*

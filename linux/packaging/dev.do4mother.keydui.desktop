@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=keydui
+GenericName=Keyboard Mapper
+Comment=Edit your keyd keyboard mappings
+Exec=keydui
+Icon=input-keyboard
+Terminal=false
+Categories=Utility;Settings;HardwareSettings;
+Keywords=keyboard;keyd;remap;mapping;

@@ -10,6 +10,32 @@ you can type a key name directly. Saving rewrites only the lines you
 changed: comments, `[ids]` blocks, named layers and spacing are preserved
 as they were.
 
+## Install
+
+Release builds are published on the
+[Releases page](https://github.com/do4Mother/keydui/releases) for
+`x86_64` and `aarch64`.
+
+```bash
+# Debian / Ubuntu
+sudo apt install ./keydui_<version>_amd64.deb
+
+# Fedora / openSUSE
+sudo dnf install ./keydui-<version>-1.x86_64.rpm
+
+# Any distro — the tarball
+tar -xzf keydui-<version>-linux-x86_64.tar.gz
+cd keydui-<version>-linux-x86_64
+sudo ./install.sh        # and sudo ./uninstall.sh to remove it
+```
+
+All three install the same thing: the app under `/usr/lib/keydui/app`
+with a `keydui` command on your `PATH`, plus the privileged helper and
+its polkit policy described below. Check the `.sha256` file next to the
+download if you want to verify it.
+
+Or build it yourself — see [Development](#development).
+
 ## Requirements
 
 - `keyd` must already be installed and its service running
@@ -27,7 +53,9 @@ root itself: it writes your edited config to a temp file, then asks
 polkit (via `pkexec`) to run a small helper that copies that file into
 place, backs up the previous config to
 `/etc/keyd/default.conf.bak`, and reloads keyd. That helper and its
-polkit policy must be installed once, up front:
+polkit policy must be installed once, up front. The `.deb`, `.rpm` and
+tarball installs above already do this; when running from a source
+checkout, do it yourself:
 
 ```bash
 sudo ./install.sh
@@ -62,3 +90,20 @@ dart format --set-exit-if-changed .
 
 `apply_test.sh` never touches `/etc`: it runs the helper against a temp
 directory with `KEYDUI_CONF` pointed inside it and a stub `keyd` on `PATH`.
+
+## Releasing
+
+Releases are cut by hand from GitHub Actions: **Actions → Release → Run
+workflow**, then give it a version like `1.2.0`. It runs the analyzer,
+the tests and the helper test, builds the Linux release bundle on native
+`x86_64` and `arm64` runners, packages each as a `.tar.gz`, a `.deb` and
+an `.rpm` with [nfpm](https://nfpm.goreleaser.com/), and opens a draft
+release tagged `v<version>` with everything attached. Publish the draft
+when you're happy with it.
+
+Package layout lives in `linux/packaging/` — `nfpm.yaml` for the
+`.deb`/`.rpm`, `install-tarball.sh` for the tarball.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
