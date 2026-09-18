@@ -177,7 +177,7 @@ void main() {
     // without it being accepted, leaving an inline error (and the stale
     // typed text) as ephemeral state tied to that row's own element.
     await tester.enterText(
-      find.widgetWithText(TextField, 'right'),
+      find.widgetWithText(TextField, 'Right Arrow'),
       'zzznotakey',
     );
     await tester.testTextInput.receiveAction(TextInputAction.done);
@@ -195,7 +195,7 @@ void main() {
     expect(find.text('zzznotakey'), findsOneWidget);
     expect(find.text("keyd doesn't recognise this key name."), findsOneWidget);
     // Row 2's own, untouched value renders cleanly at its new position.
-    expect(find.widgetWithText(TextField, 'up'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Up Arrow'), findsOneWidget);
   });
 
   testWidgets('didUpdateWidget swaps the controller listener when the parent '

@@ -5,173 +5,261 @@ import 'package:keydui/models/mapping_row.dart';
 import 'package:keydui/models/modifier.dart';
 import 'package:keydui/models/remap_warning.dart';
 import 'package:keydui/services/key_catalog.dart';
+import 'package:keydui/ui/chord_field.dart';
 import 'package:keydui/ui/mapping_row_tile.dart';
 
-const catalog = KeyCatalog(['esc', 'home', 'left']);
+const catalog = KeyCatalog(['esc', 'f4', 'home', 'left']);
 const row = MappingRow(
   modifiers: {Modifier.meta},
   fromKey: 'left',
   toKey: 'home',
 );
 
-void main() {
-  testWidgets('renders modifiers and both keys', (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: MappingRowTile(
-            row: row,
-            catalog: catalog,
-            onChanged: (_) {},
-            onDelete: () {},
-          ),
+Future<List<MappingRow>> pumpTile(
+  WidgetTester tester, {
+  MappingRow row = row,
+  VoidCallback? onDelete,
+  RemapWarning? Function(String)? warningBuilder,
+}) async {
+  final updates = <MappingRow>[];
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: MappingRowTile(
+          row: row,
+          catalog: catalog,
+          warningBuilder: warningBuilder,
+          onChanged: updates.add,
+          onDelete: onDelete ?? () {},
         ),
       ),
-    );
-    expect(find.text('meta'), findsOneWidget);
-    expect(find.text('shift'), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'left'), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'home'), findsOneWidget);
+    ),
+  );
+  return updates;
+}
+
+/// The two halves of the tile carry identically-labelled chips, so a chip
+/// finder has to say which side it means.
+Finder chipOn(String side, String label) => find.descendant(
+  of: find.widgetWithText(ChordField, side),
+  matching: find.widgetWithText(FilterChip, label),
+);
+
+Finder keyFieldOn(String side) => find.descendant(
+  of: find.widgetWithText(ChordField, side),
+  matching: find.byType(TextField),
+);
+
+void main() {
+  testWidgets('renders both halves in keyboard names', (tester) async {
+    await pumpTile(tester);
+    expect(find.widgetWithText(TextField, 'Left Arrow'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Home'), findsOneWidget);
+    // Every modifier is offered on both sides now, under its keyboard name.
+    expect(find.widgetWithText(FilterChip, 'Super'), findsNWidgets(2));
+    expect(find.widgetWithText(FilterChip, 'Ctrl'), findsNWidgets(2));
+    expect(find.text('meta'), findsNothing);
   });
 
-  testWidgets('toggling a chip reports the new modifier set', (tester) async {
-    MappingRow? updated;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: MappingRowTile(
-            row: row,
-            catalog: catalog,
-            onChanged: (r) => updated = r,
-            onDelete: () {},
-          ),
-        ),
-      ),
-    );
-    await tester.tap(find.text('shift'));
+  testWidgets('toggling a trigger chip reports the new modifier set', (
+    tester,
+  ) async {
+    final updates = await pumpTile(tester);
+    await tester.tap(chipOn('Press', 'Shift'));
     await tester.pumpAndSettle();
-    expect(updated!.modifiers, {Modifier.meta, Modifier.shift});
+    expect(updates.single.modifiers, {Modifier.meta, Modifier.shift});
+    expect(updates.single.fromKey, 'left');
   });
 
   testWidgets('delete fires', (tester) async {
     var deleted = false;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: MappingRowTile(
-            row: row,
-            catalog: catalog,
-            onChanged: (_) {},
-            onDelete: () => deleted = true,
-          ),
-        ),
-      ),
-    );
+    await pumpTile(tester, onDelete: () => deleted = true);
     await tester.tap(find.byIcon(Icons.delete_outline));
     expect(deleted, isTrue);
   });
 
-  testWidgets(
-    'a listen capture on the from-field applies the captured modifiers '
-    'and the captured key together, so neither call clobbers the other',
-    (tester) async {
-      final updates = <MappingRow>[];
-      const plainRow = MappingRow(modifiers: {}, fromKey: 'esc', toKey: 'home');
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: MappingRowTile(
-              row: plainRow,
-              catalog: catalog,
-              onChanged: updates.add,
-              onDelete: () {},
-            ),
-          ),
+  group('the action side', () {
+    testWidgets('decodes a keyd prefix into chips', (tester) async {
+      // The whole point of the exercise: `S-home` is Shift+Home, and the row
+      // says so instead of making the user decode the prefix.
+      await pumpTile(
+        tester,
+        row: const MappingRow(modifiers: {}, fromKey: 'esc', toKey: 'S-home'),
+      );
+      final shift = tester.widget<FilterChip>(chipOn('Send', 'Shift'));
+      expect(shift.selected, isTrue);
+      expect(
+        tester.widget<FilterChip>(chipOn('Press', 'Shift')).selected,
+        isFalse,
+      );
+      expect(find.widgetWithText(TextField, 'Home'), findsOneWidget);
+      expect(find.textContaining('Shift + Home'), findsOneWidget);
+      expect(find.textContaining('writes S-home'), findsOneWidget);
+    });
+
+    testWidgets('toggling a chip rewrites the action in keyd notation', (
+      tester,
+    ) async {
+      final updates = await pumpTile(
+        tester,
+        row: const MappingRow(modifiers: {}, fromKey: 'esc', toKey: 'f4'),
+      );
+      await tester.tap(chipOn('Send', 'Ctrl'));
+      await tester.pumpAndSettle();
+      expect(updates.single.toKey, 'C-f4');
+    });
+
+    testWidgets('a capture builds ctrl+alt+f4 without typing a prefix', (
+      tester,
+    ) async {
+      final updates = await pumpTile(
+        tester,
+        row: const MappingRow(modifiers: {}, fromKey: 'esc', toKey: ''),
+      );
+      // The second capture button belongs to the action side.
+      await tester.tap(find.byIcon(Icons.keyboard).last);
+      await tester.pumpAndSettle();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.f4);
+      await tester.pumpAndSettle();
+
+      expect(updates.last.toKey, 'C-A-f4');
+      expect(updates.last.fromKey, 'esc');
+
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.f4);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    });
+
+    testWidgets('a prefix typed by hand still works and merges with chips', (
+      tester,
+    ) async {
+      final updates = await pumpTile(
+        tester,
+        row: const MappingRow(modifiers: {}, fromKey: 'esc', toKey: 'C-f4'),
+      );
+      await tester.enterText(keyFieldOn('Send'), 'S-home');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(updates.last.toKey, 'C-S-home');
+    });
+
+    testWidgets('an expression the chips cannot show stays raw text', (
+      tester,
+    ) async {
+      await pumpTile(
+        tester,
+        row: const MappingRow(
+          modifiers: {},
+          fromKey: 'esc',
+          toKey: 'macro(a b)',
         ),
       );
+      expect(find.widgetWithText(ChordField, 'Send'), findsNothing);
+      expect(find.widgetWithText(TextField, 'macro(a b)'), findsOneWidget);
+      expect(
+        find.text('This is a keyd expression, so it stays as typed.'),
+        findsOneWidget,
+      );
+    });
 
-      // Both the from- and to-fields have a listen (headphones) button; the
-      // from-field's is first.
-      await tester.tap(find.byIcon(Icons.headphones).first);
+    testWidgets('an expression can be edited, and stays an expression', (
+      tester,
+    ) async {
+      final updates = await pumpTile(
+        tester,
+        row: const MappingRow(
+          modifiers: {},
+          fromKey: 'esc',
+          toKey: 'macro(a b)',
+        ),
+      );
+      await tester.enterText(find.byType(TextField).last, 'layer(nav)');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
+      expect(updates.last.toKey, 'layer(nav)');
+    });
 
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowLeft);
+    testWidgets('leaving the expression behind restores the chips', (
+      tester,
+    ) async {
+      final updates = await pumpTile(
+        tester,
+        row: const MappingRow(
+          modifiers: {},
+          fromKey: 'esc',
+          toKey: 'macro(a b)',
+        ),
+      );
+      await tester.tap(find.text('Use keys instead'));
       await tester.pumpAndSettle();
+      expect(updates.single.toKey, '');
+    });
 
-      expect(updates, isNotEmpty);
-      // Whatever the last row emitted to onChanged is, it must carry BOTH the
-      // captured modifier and the captured key -- not just one of the two.
-      expect(updates.last.modifiers, {Modifier.meta});
-      expect(updates.last.fromKey, 'left');
+    testWidgets('typing an expression into the key field switches modes', (
+      tester,
+    ) async {
+      final updates = await pumpTile(
+        tester,
+        row: const MappingRow(modifiers: {}, fromKey: 'esc', toKey: 'C-f4'),
+      );
+      await tester.enterText(keyFieldOn('Send'), 'macro(a b)');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      // `C-macro(a b)` is not valid keyd, so the chips are dropped rather
+      // than stapled onto the expression.
+      expect(updates.last.toKey, 'macro(a b)');
+    });
+  });
 
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowLeft);
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
-    },
-  );
-
-  testWidgets('the to-field accepts an action the catalog does not list', (
+  testWidgets('a listen capture on the trigger applies the captured modifiers '
+      'and the captured key together, so neither call clobbers the other', (
     tester,
   ) async {
-    String? picked;
-    const plainRow = MappingRow(modifiers: {}, fromKey: 'esc', toKey: 'home');
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: MappingRowTile(
-            row: plainRow,
-            catalog: catalog,
-            onChanged: (r) => picked = r.toKey,
-            onDelete: () {},
-          ),
-        ),
-      ),
+    final updates = await pumpTile(
+      tester,
+      row: const MappingRow(modifiers: {}, fromKey: 'esc', toKey: 'home'),
     );
-
-    final toField = find.widgetWithText(TextField, 'home');
-    await tester.enterText(toField, 'S-home');
-    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.tap(find.byIcon(Icons.keyboard).first);
     await tester.pumpAndSettle();
 
-    expect(picked, 'S-home');
-    expect(find.text("keyd doesn't recognise this key name."), findsNothing);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pumpAndSettle();
+
+    expect(updates, isNotEmpty);
+    expect(updates.last.modifiers, {Modifier.meta});
+    expect(updates.last.fromKey, 'left');
+    expect(updates.last.toKey, 'home');
+
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
   });
 
   testWidgets(
     'accepting a remap warning moves the modifier half onto the chips and '
-    'only the bare key into the from-field',
+    'only the bare key into the trigger key field',
     (tester) async {
-      final updates = <MappingRow>[];
-      const plainRow = MappingRow(modifiers: {}, fromKey: '', toKey: 'pageup');
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: MappingRowTile(
-              row: plainRow,
-              catalog: catalog,
-              warningBuilder: (key) => key == 'home'
-                  ? const RemapWarning(
-                      modifiers: {Modifier.meta},
-                      fromKey: 'left',
-                    )
-                  : null,
-              onChanged: updates.add,
-              onDelete: () {},
-            ),
-          ),
-        ),
+      final updates = await pumpTile(
+        tester,
+        row: const MappingRow(modifiers: {}, fromKey: '', toKey: 'pageup'),
+        warningBuilder: (key) => key == 'home'
+            ? const RemapWarning(modifiers: {Modifier.meta}, fromKey: 'left')
+            : null,
       );
 
-      // Capture `home` in the from-field: keyd already produces it from
-      // meta+left, so the tile offers that combination.
-      await tester.tap(find.byIcon(Icons.headphones).first);
+      await tester.tap(find.byIcon(Icons.keyboard).first);
       await tester.pumpAndSettle();
       await tester.sendKeyEvent(LogicalKeyboardKey.home);
       await tester.pumpAndSettle();
-      expect(find.text('keyd maps meta+left to this key'), findsOneWidget);
+      expect(
+        find.text('keyd maps Super + Left Arrow to this key'),
+        findsOneWidget,
+      );
 
       updates.clear();
-      await tester.tap(find.text('Use meta+left'));
+      await tester.tap(find.text('Use Super + Left Arrow'));
       await tester.pumpAndSettle();
 
       expect(updates, hasLength(1));

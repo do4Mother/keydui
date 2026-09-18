@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../models/key_action.dart';
 import '../models/mapping_row.dart';
-import '../models/modifier.dart';
 import '../models/remap_warning.dart';
 import '../services/key_catalog.dart';
+import '../services/key_labels.dart';
+import 'chord_field.dart';
 import 'key_field.dart';
 
 class MappingRowTile extends StatelessWidget {
@@ -24,93 +26,119 @@ class MappingRowTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // A from-field listen capture fires `onModifiersCaptured` and then
-    // `onChanged` synchronously, before this widget rebuilds. Both closures
-    // close over the SAME `row` (this build's field, not a live reference),
-    // so if each independently called the outer `onChanged` with
-    // `row.copyWith(...)`, the second call would derive from the stale,
-    // pre-capture `row` and silently drop the modifier update the first
-    // call made. Stashing the captured modifiers in a build-local variable
-    // and folding them into the single `onChanged` call the key capture
-    // triggers keeps both pieces of a Meta+Left-style capture together.
-    Set<Modifier>? capturedModifiers;
+    // The trigger's modifiers live on the row (they become the section
+    // header); the action's live inside its keyd text as `C-A-` prefixes.
+    // Both sides are the same thing to a user, so both are chips.
+    final action = KeyAction.parse(row.toKey);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Column(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Wrap(
-              spacing: 6,
-              children: [
-                for (final modifier in Modifier.values)
-                  FilterChip(
-                    label: Text(modifier.keydName),
-                    selected: row.modifiers.contains(modifier),
-                    onSelected: (selected) {
-                      final next = row.modifiers.toSet();
-                      selected ? next.add(modifier) : next.remove(modifier);
-                      onChanged(row.copyWith(modifiers: next));
-                    },
-                  ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: KeyField(
-                    label: 'From',
-                    value: row.fromKey,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ChordField(
+                    label: 'Press',
+                    modifiers: row.modifiers,
+                    keyName: row.fromKey,
                     catalog: catalog,
                     warningBuilder: warningBuilder,
-                    // The warning's trigger is `<modifiers>+<key>`; the key
-                    // field can only hold the key half, so accepting it has
-                    // to move the modifier half onto the row's chips too.
-                    // Feeding the whole `meta+left` label through onChanged
-                    // would produce `meta+left = …` inside `[main]`, which
-                    // keyd rejects.
-                    onWarningAccepted: (warning) => onChanged(
-                      row.copyWith(
-                        modifiers: warning.modifiers,
-                        fromKey: warning.fromKey,
+                    onChanged: (modifiers, key) => onChanged(
+                      row.copyWith(modifiers: modifiers, fromKey: key),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  if (action.isAdvanced)
+                    _AdvancedAction(
+                      row: row,
+                      catalog: catalog,
+                      onChanged: onChanged,
+                    )
+                  else
+                    ChordField(
+                      label: 'Send',
+                      modifiers: action.modifiers,
+                      keyName: action.key,
+                      catalog: catalog,
+                      // A key field on this side holds a keyd action: it must
+                      // not be lower-cased or rejected for being absent from
+                      // the key catalog, so that typing `macro(...)` or a
+                      // prefixed action still works and switches this side to
+                      // its raw editor.
+                      validateAgainstCatalog: false,
+                      footnote: _footnoteFor(row.toKey, action),
+                      onChanged: (modifiers, key) => onChanged(
+                        row.copyWith(toKey: KeyAction.compose(modifiers, key)),
                       ),
                     ),
-                    onModifiersCaptured: (mods) => capturedModifiers = mods,
-                    onChanged: (key) => onChanged(
-                      row.copyWith(modifiers: capturedModifiers, fromKey: key),
-                    ),
-                  ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Icon(Icons.arrow_forward),
-                ),
-                Expanded(
-                  child: KeyField(
-                    label: 'To',
-                    value: row.toKey,
-                    catalog: catalog,
-                    // A to-field holds a keyd action, not a bare key name
-                    // (e.g. `S-home`, `macro(...)`) -- it must not be
-                    // validated against the key catalog or lower-cased.
-                    validateAgainstCatalog: false,
-                    onChanged: (key) => onChanged(row.copyWith(toKey: key)),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  tooltip: 'Delete mapping',
-                  onPressed: onDelete,
-                ),
-              ],
+                ],
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              tooltip: 'Delete mapping',
+              onPressed: onDelete,
             ),
           ],
         ),
       ),
     );
   }
+
+  /// What the chord will be written as, shown only once it says something the
+  /// chips do not: a bare key already reads the same in both vocabularies.
+  static String? _footnoteFor(String toKey, KeyAction action) {
+    if (action.key.isEmpty || action.modifiers.isEmpty) return null;
+    return '${chordLabel(action.modifiers, action.key)}  ·  writes $toKey';
+  }
+}
+
+/// The raw editor for an action the chips cannot express -- `macro(...)`,
+/// `layer(...)`, an AltGr `G-` prefix.
+///
+/// Rendering those as chips would mean rewriting them, so they keep the
+/// plain text box instead. Clearing the action switches back to chips.
+class _AdvancedAction extends StatelessWidget {
+  const _AdvancedAction({
+    required this.row,
+    required this.catalog,
+    required this.onChanged,
+  });
+
+  final MappingRow row;
+  final KeyCatalog catalog;
+  final ValueChanged<MappingRow> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      KeyField(
+        label: 'keyd action',
+        value: row.toKey,
+        catalog: catalog,
+        validateAgainstCatalog: false,
+        onChanged: (value) => onChanged(row.copyWith(toKey: value)),
+      ),
+      Row(
+        children: [
+          Expanded(
+            child: Text(
+              'This is a keyd expression, so it stays as typed.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          TextButton(
+            onPressed: () => onChanged(row.copyWith(toKey: '')),
+            child: const Text('Use keys instead'),
+          ),
+        ],
+      ),
+    ],
+  );
 }

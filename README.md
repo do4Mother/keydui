@@ -10,6 +10,26 @@ you can type a key name directly. Saving rewrites only the lines you
 changed: comments, `[ids]` blocks, named layers and spacing are preserved
 as they were.
 
+## Editing a mapping
+
+Each row has two halves, **Press** (the combination you hit) and **Send**
+(what keyd produces), and both are entered the same way: tick the
+modifier chips, then pick the key — by typing it or by pressing the
+keyboard button and hitting the key itself. Holding modifiers during a
+capture ticks their chips for you, so Ctrl+Alt+F4 can be entered by
+pressing Ctrl+Alt+F4.
+
+Keys and modifiers are shown the way they are printed on a keyboard
+(`Ctrl`, `Super`, `Page Up`, `Left Arrow`); keyd's own names (`control`,
+`meta`, `pageup`, `left`) are what gets written to the file. Where the
+two differ for a whole chord, the row says so under the Send field:
+Shift+Home is shown as `Shift + Home · writes S-home`.
+
+A keyd action the chips cannot represent — `macro(...)`, `layer(...)`,
+`command(...)`, or an AltGr `G-` prefix — keeps a plain text box and is
+written exactly as typed. Use the "Use keys instead" button to go back to
+chips.
+
 ## Requirements
 
 - `keyd` must already be installed and its service running
