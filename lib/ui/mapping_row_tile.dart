@@ -52,7 +52,7 @@ class MappingRowTile extends StatelessWidget {
                       row.copyWith(modifiers: modifiers, fromKey: key),
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 16),
                   if (action.isAdvanced)
                     _AdvancedAction(
                       row: row,

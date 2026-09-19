@@ -50,6 +50,35 @@ Finder keyFieldOn(String side) => find.descendant(
   matching: find.byType(TextField),
 );
 
+/// A tile wired to its own state, the way the app wires it: whatever the tile
+/// reports flows straight back in as its next row. A chip that does not stick
+/// here does not stick in the app.
+Future<List<MappingRow>> pumpLiveTile(
+  WidgetTester tester, {
+  MappingRow row = row,
+}) async {
+  final updates = <MappingRow>[];
+  var current = row;
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: StatefulBuilder(
+          builder: (context, setState) => MappingRowTile(
+            row: current,
+            catalog: catalog,
+            onChanged: (next) {
+              updates.add(next);
+              setState(() => current = next);
+            },
+            onDelete: () {},
+          ),
+        ),
+      ),
+    ),
+  );
+  return updates;
+}
+
 void main() {
   testWidgets('renders both halves in keyboard names', (tester) async {
     await pumpTile(tester);
@@ -271,4 +300,77 @@ void main() {
       expect(updates.single.toKey, 'pageup');
     },
   );
+
+  group('chips on a half that has no key yet', () {
+    const empty = MappingRow(modifiers: {}, fromKey: '', toKey: '');
+
+    testWidgets('a trigger chip stays selected', (tester) async {
+      await pumpLiveTile(tester, row: empty);
+      await tester.tap(chipOn('Press', 'Ctrl'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<FilterChip>(chipOn('Press', 'Ctrl')).selected,
+        isTrue,
+      );
+    });
+
+    testWidgets('an action chip stays selected', (tester) async {
+      // An action with no key has no keyd text to hold its modifiers -- `C-`
+      // alone is not a mapping -- so the chips are remembered here until a
+      // key arrives to carry them.
+      await pumpLiveTile(tester, row: empty);
+      await tester.tap(chipOn('Send', 'Ctrl'));
+      await tester.tap(chipOn('Send', 'Super'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<FilterChip>(chipOn('Send', 'Ctrl')).selected,
+        isTrue,
+      );
+      expect(
+        tester.widget<FilterChip>(chipOn('Send', 'Super')).selected,
+        isTrue,
+      );
+    });
+
+    testWidgets('an action chip un-toggles again', (tester) async {
+      await pumpLiveTile(tester, row: empty);
+      await tester.tap(chipOn('Send', 'Ctrl'));
+      await tester.pumpAndSettle();
+      await tester.tap(chipOn('Send', 'Ctrl'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<FilterChip>(chipOn('Send', 'Ctrl')).selected,
+        isFalse,
+      );
+    });
+
+    testWidgets('the remembered chips reach the key typed next', (
+      tester,
+    ) async {
+      final updates = await pumpLiveTile(tester, row: empty);
+      await tester.tap(chipOn('Send', 'Ctrl'));
+      await tester.pumpAndSettle();
+      await tester.enterText(keyFieldOn('Send'), 'f4');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(updates.last.toKey, 'C-f4');
+    });
+
+    testWidgets('a capture replaces the remembered chips', (tester) async {
+      // A capture is the whole chord, so what was held during it wins over
+      // chips clicked beforehand -- here nothing was held, so Shift goes.
+      final updates = await pumpLiveTile(tester, row: empty);
+      await tester.tap(chipOn('Send', 'Shift'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.keyboard).last);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.home);
+      await tester.pumpAndSettle();
+      expect(updates.last.toKey, 'home');
+      expect(
+        tester.widget<FilterChip>(chipOn('Send', 'Shift')).selected,
+        isFalse,
+      );
+    });
+  });
 }
