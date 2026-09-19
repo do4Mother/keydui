@@ -56,7 +56,7 @@ void main() {
   testWidgets('listen mode captures a keypress', (tester) async {
     String? picked;
     await pumpField(tester, onChanged: (v) => picked = v);
-    await tester.tap(find.byIcon(Icons.headphones));
+    await tester.tap(find.byIcon(Icons.keyboard));
     await tester.pumpAndSettle();
     expect(find.text('Press a key…'), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.f4);
@@ -70,7 +70,7 @@ void main() {
   ) async {
     String? picked;
     await pumpField(tester, onChanged: (v) => picked = v);
-    await tester.tap(find.byIcon(Icons.headphones));
+    await tester.tap(find.byIcon(Icons.keyboard));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
@@ -89,7 +89,7 @@ void main() {
           : null,
       onWarningAccepted: accepted.add,
     );
-    await tester.tap(find.byIcon(Icons.headphones));
+    await tester.tap(find.byIcon(Icons.keyboard));
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.home);
     await tester.pumpAndSettle();
@@ -111,7 +111,7 @@ void main() {
   testWidgets('a modifier held alone is not a capture', (tester) async {
     String? picked;
     await pumpField(tester, onChanged: (v) => picked = v);
-    await tester.tap(find.byIcon(Icons.headphones));
+    await tester.tap(find.byIcon(Icons.keyboard));
     await tester.pumpAndSettle();
     await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
     await tester.pumpAndSettle();
@@ -131,7 +131,7 @@ void main() {
       onChanged: (v) => picked = v,
       onModifiersCaptured: (mods) => capturedModifiers = mods,
     );
-    await tester.tap(find.byIcon(Icons.headphones));
+    await tester.tap(find.byIcon(Icons.keyboard));
     await tester.pumpAndSettle();
     await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
     await tester.sendKeyDownEvent(LogicalKeyboardKey.f4);
@@ -147,7 +147,7 @@ void main() {
   ) async {
     String? picked;
     await pumpField(tester, onChanged: (v) => picked = v);
-    await tester.tap(find.byIcon(Icons.headphones));
+    await tester.tap(find.byIcon(Icons.keyboard));
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
@@ -187,7 +187,7 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.byIcon(Icons.headphones));
+    await tester.tap(find.byIcon(Icons.keyboard));
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.home);
     await tester.pumpAndSettle();
@@ -310,7 +310,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text("keyd doesn't recognise this key name."), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.headphones));
+    await tester.tap(find.byIcon(Icons.keyboard));
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.f4);
     await tester.pumpAndSettle();

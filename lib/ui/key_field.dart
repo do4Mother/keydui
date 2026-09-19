@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../models/modifier.dart';
 import '../models/remap_warning.dart';
 import '../services/key_catalog.dart';
+import '../services/key_labels.dart';
 import '../services/physical_key_names.dart';
 
 class KeyField extends StatefulWidget {
@@ -17,6 +18,7 @@ class KeyField extends StatefulWidget {
     this.warningBuilder,
     this.onWarningAccepted,
     this.validateAgainstCatalog = true,
+    this.humanLabels = false,
   });
 
   final String label;
@@ -73,6 +75,17 @@ class KeyField extends StatefulWidget {
   /// the rejection and case-folding on manual submission are affected.
   final bool validateAgainstCatalog;
 
+  /// Whether the field shows keys the way a keyboard prints them (`Page Up`,
+  /// `Left Arrow`) instead of keyd's own names (`pageup`, `left`).
+  ///
+  /// This is presentation only: [value] and [onChanged] always carry keyd
+  /// names, so nothing downstream -- least of all the config file -- ever
+  /// sees a display label. Typed text is resolved back with
+  /// [knownKeydNameForLabel], which leaves anything that is not a known
+  /// label untouched so a to-field's `S-home` or `macro(a b)` survives a
+  /// submission unchanged.
+  final bool humanLabels;
+
   @override
   State<KeyField> createState() => _KeyFieldState();
 }
@@ -83,18 +96,27 @@ class _KeyFieldState extends State<KeyField> {
 
   final _listenFocus = FocusNode();
   final _fieldFocus = FocusNode();
-  late final _controller = TextEditingController(text: widget.value);
+  late final _controller = TextEditingController(text: _display(widget.value));
   bool _listening = false;
   RemapWarning? _warning;
   String? _entryError;
 
+  /// How a keyd name is shown in the text box.
+  String _display(String value) => widget.humanLabels ? keyLabel(value) : value;
+
+  /// The keyd name behind text the user typed. Anything that is not a known
+  /// display label is handed back untouched -- see [KeyField.humanLabels].
+  String _resolve(String text) =>
+      widget.humanLabels ? (knownKeydNameForLabel(text) ?? text) : text;
+
   @override
   void didUpdateWidget(covariant KeyField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.value != oldWidget.value && _controller.text != widget.value) {
+    final shown = _display(widget.value);
+    if (widget.value != oldWidget.value && _controller.text != shown) {
       _controller.value = TextEditingValue(
-        text: widget.value,
-        selection: TextSelection.collapsed(offset: widget.value.length),
+        text: shown,
+        selection: TextSelection.collapsed(offset: shown.length),
       );
     }
   }
@@ -116,13 +138,14 @@ class _KeyFieldState extends State<KeyField> {
 
   void _onFieldTextChanged(String text) {
     if (!widget.validateAgainstCatalog) return;
-    if (_entryError != null && _isKnownKey(text.trim().toLowerCase())) {
+    if (_entryError != null &&
+        _isKnownKey(_resolve(text.trim()).toLowerCase())) {
       setState(() => _entryError = null);
     }
   }
 
   void _onFieldSubmitted(String text, VoidCallback onFieldSubmitted) {
-    final trimmed = text.trim();
+    final trimmed = _resolve(text.trim());
     if (!widget.validateAgainstCatalog) {
       // A to-field's value is a keyd action, not a bare key name: it may
       // carry an upper-case modifier prefix (`S-home`) or be a macro/layer
@@ -215,7 +238,10 @@ class _KeyFieldState extends State<KeyField> {
               child: Autocomplete<String>(
                 textEditingController: _controller,
                 focusNode: _fieldFocus,
-                optionsBuilder: (value) => widget.catalog.search(value.text),
+                optionsBuilder: (value) => widget.catalog.search(
+                  widget.humanLabels ? keySearchQuery(value.text) : value.text,
+                ),
+                displayStringForOption: _display,
                 onSelected: (selection) {
                   setState(() => _entryError = null);
                   widget.onChanged(selection);
@@ -237,32 +263,44 @@ class _KeyFieldState extends State<KeyField> {
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.headphones),
-              tooltip: 'Press a key to capture it',
+              icon: const Icon(Icons.keyboard),
+              tooltip: 'Press the key you want to use',
               onPressed: _startListening,
             ),
           ],
         ),
         if (_warning != null)
-          Row(
-            children: [
-              Flexible(
-                child: Text(
-                  'keyd maps ${_warning!.label} to this key',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
-                    fontSize: 12,
+          Builder(
+            builder: (context) {
+              final warningLabel = widget.humanLabels
+                  ? chordLabel(_warning!.modifiers, _warning!.fromKey)
+                  : _warning!.label;
+              // A column, not a row: the message and the suggestion button
+              // both grow with the length of the chord being suggested, and
+              // this field is only as wide as half a mapping row.
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      'keyd maps $warningLabel to this key',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              TextButton(
-                onPressed: () {
-                  widget.onWarningAccepted?.call(_warning!);
-                  setState(() => _warning = null);
-                },
-                child: Text('Use ${_warning!.label}'),
-              ),
-            ],
+                  TextButton(
+                    onPressed: () {
+                      widget.onWarningAccepted?.call(_warning!);
+                      setState(() => _warning = null);
+                    },
+                    child: Text('Use $warningLabel'),
+                  ),
+                ],
+              );
+            },
           ),
       ],
     );
