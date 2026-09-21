@@ -42,6 +42,40 @@ right = end
 ''');
   });
 
+  // keyd binds a config to devices through its [ids] section, and a file
+  // without one matches nothing. `keyd check` still passes such a file and
+  // `keyd reload` still succeeds, so a config written without [ids] is
+  // applied, reported as saved, and silently remaps nothing.
+  test('a config with no [ids] section gains one', () {
+    const rows = [MappingRow(modifiers: {}, fromKey: 'capslock', toKey: 'esc')];
+    expect(applyRows('', rows), '''[ids]
+*
+
+[main]
+capslock = esc
+''');
+  });
+
+  test('an existing [ids] section is left alone', () {
+    final rows = parseKeydConfig(sample).rows.toList();
+    expect(applyRows(sample, rows), sample);
+  });
+
+  test('an [ids] section listing device ids is left alone', () {
+    const withIds = '''[ids]
+0123:4567
+
+[main]
+capslock = esc
+''';
+    final rows = parseKeydConfig(withIds).rows.toList();
+    expect(applyRows(withIds, rows), withIds);
+  });
+
+  test('an empty config with no rows stays empty', () {
+    expect(applyRows('', const []), '');
+  });
+
   test('a new modifier group appends a new section', () {
     final rows = parseKeydConfig(sample).rows.toList()
       ..add(const MappingRow(modifiers: {}, fromKey: 'capslock', toKey: 'esc'));
@@ -60,11 +94,11 @@ capslock = esc
   });
 
   test('passthrough lines inside a section survive an edit', () {
-    const text = '[main]\n# keep me\ncapslock = esc\n';
+    const text = '[ids]\n*\n\n[main]\n# keep me\ncapslock = esc\n';
     final rows = parseKeydConfig(text).rows.toList();
     expect(
       applyRows(text, [rows.single.copyWith(toKey: 'tab')]),
-      '[main]\n# keep me\ncapslock = tab\n',
+      '[ids]\n*\n\n[main]\n# keep me\ncapslock = tab\n',
     );
   });
 
@@ -98,7 +132,7 @@ capslock = esc
 
   group('duplicate section headers', () {
     // `keyd check` accepts a file that opens the same section twice.
-    const doubled = '[main]\na = b\nc = d\n\n[main]\ne = f\n';
+    const doubled = '[ids]\n*\n\n[main]\na = b\nc = d\n\n[main]\ne = f\n';
 
     test('an unedited round-trip through withRows is byte identical', () {
       final config = parseKeydConfig(doubled);
@@ -112,7 +146,7 @@ capslock = esc
       rows[2] = rows[2].copyWith(toKey: 'g');
       expect(
         serializeKeydConfig(config.withRows(rows)),
-        '[main]\na = b\nc = d\n\n[main]\ne = g\n',
+        '[ids]\n*\n\n[main]\na = b\nc = d\n\n[main]\ne = g\n',
       );
     });
 
@@ -122,18 +156,21 @@ capslock = esc
         ..add(const MappingRow(modifiers: {}, fromKey: 'x', toKey: 'y'));
       expect(
         serializeKeydConfig(config.withRows(rows)),
-        '[main]\na = b\nc = d\n\n[main]\ne = f\nx = y\n',
+        '[ids]\n*\n\n[main]\na = b\nc = d\n\n[main]\ne = f\nx = y\n',
       );
     });
   });
 
   test('adding then removing a section leaves no blank line behind', () {
-    const text = '[meta]\nleft = home\n';
+    const text = '[ids]\n*\n\n[meta]\nleft = home\n';
     final withNewSection = applyRows(text, [
       ...parseKeydConfig(text).rows,
       const MappingRow(modifiers: {}, fromKey: 'capslock', toKey: 'esc'),
     ]);
-    expect(withNewSection, '[meta]\nleft = home\n\n[main]\ncapslock = esc\n');
+    expect(
+      withNewSection,
+      '[ids]\n*\n\n[meta]\nleft = home\n\n[main]\ncapslock = esc\n',
+    );
 
     // Reopening that file and deleting the added row must give the original
     // back, not the original plus an orphaned blank line.
@@ -172,7 +209,7 @@ capslock = esc
   });
 
   test('comments between rows survive unedited round-trip', () {
-    const text = '[main]\nleft = home\n# a note\nright = end\n';
+    const text = '[ids]\n*\n\n[main]\nleft = home\n# a note\nright = end\n';
     final config = parseKeydConfig(text);
     expect(serializeKeydConfig(config.withRows(config.rows)), text);
   });

@@ -159,7 +159,47 @@ class KeydConfig {
       lastSectionIndex = insertAt + 1;
     }
 
+    _ensureIdsSection(result);
+
     return KeydConfig(result, endsWithNewline: endsWithNewline);
+  }
+
+  /// keyd binds a config to devices through its `[ids]` section: a file
+  /// without one matches no keyboard at all. Nothing catches that for the
+  /// user -- `keyd check` accepts such a file and `keyd reload` succeeds --
+  /// so a config saved without `[ids]` is reported as applied and then
+  /// silently remaps nothing. It happens whenever keydui writes the first
+  /// config a machine has ever had, since there is then no existing `[ids]`
+  /// block to pass through.
+  ///
+  /// So if [result] holds mappings but no `[ids]`, open the file with the
+  /// catch-all form, `*`, which matches every keyboard not explicitly
+  /// excluded. An `[ids]` the user already has -- whether `*` or a list of
+  /// device ids -- is passthrough like any other unmodelled section and is
+  /// left exactly as it is.
+  static void _ensureIdsSection(List<ConfigElement> result) {
+    if (!result.any((element) => element is MappingSection)) return;
+    if (result.any(
+      (element) =>
+          element is PassthroughBlock &&
+          element.lines.any((line) => line.trim() == '[ids]'),
+    )) {
+      return;
+    }
+
+    // The section needs a blank line between it and what follows, unless
+    // what follows already opens with one.
+    final first = result.first;
+    final followedByBlank =
+        first is PassthroughBlock &&
+        first.lines.isNotEmpty &&
+        first.lines.first.trim().isEmpty;
+    result.insert(
+      0,
+      PassthroughBlock(
+        followedByBlank ? const ['[ids]', '*'] : const ['[ids]', '*', ''],
+      ),
+    );
   }
 
   /// Removes one trailing blank line from whatever [result] currently ends

@@ -68,13 +68,13 @@ void main() {
   });
 
   test('a commented-out mapping survives editing a real row beside it', () {
-    const text = '[main]\n#capslock = esc\nf1 = f2\n';
+    const text = '[ids]\n*\n\n[main]\n#capslock = esc\nf1 = f2\n';
     final config = parseKeydConfig(text);
     final rows = config.rows.toList();
     rows[0] = rows[0].copyWith(toKey: 'f3');
     expect(
       serializeKeydConfig(config.withRows(rows)),
-      '[main]\n#capslock = esc\nf1 = f3\n',
+      '[ids]\n*\n\n[main]\n#capslock = esc\nf1 = f3\n',
     );
   });
 
