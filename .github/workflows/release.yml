@@ -154,7 +154,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      # Full history: the release notes are built from the last five commits,
+      # and the default shallow clone has only one.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/download-artifact@v4
         with:
@@ -170,7 +174,22 @@ jobs:
         run: |
           set -euo pipefail
           tag="v${{ inputs.version }}"
-          args=(--title "keydui $tag" --target "${{ github.sha }}" --generate-notes)
+
+          # Notes are the last five commits leading to the released sha, so a
+          # reader sees what actually went in without chasing the compare view.
+          {
+            echo "### What's in this release"
+            echo
+            git log -5 --no-merges --pretty=format:'- %s (%h)' "${{ github.sha }}"
+            echo
+          } > /tmp/notes.md
+          cat /tmp/notes.md
+
+          args=(
+            --title "keydui $tag"
+            --target "${{ github.sha }}"
+            --notes-file /tmp/notes.md
+          )
           if [ "${{ inputs.draft }}" = "true" ]; then args+=(--draft); fi
           if [ "${{ inputs.prerelease }}" = "true" ]; then args+=(--prerelease); fi
           gh release create "$tag" "${args[@]}" dist/*
